@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo ediprofile",
+  "type": "object",
+  "description": "EDI profile configuration. The `fileType` field determines which set of\ninterchange control fields apply (X12 ISA/GS or EDIFACT UNB) and is\nimmutable after creation. Fields for the other standard are ignored.",
+  "x-celigo-ai-guidance": [
+    "Request schema for creating or updating an EDI profile."
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Human-readable name for the EDI profile",
+      "x-celigo-ai-guidance": [
+        "Name the profile after the trading partner and EDI standard whose interchange identity it carries (e.g. \"Acme Corp X12 Profile\"), not after a flow's purpose \u2014 one partner's profile is reused by every document exchange with that partner."
+      ],
+      "examples": ["Acme Corp X12 Profile", "Partner EDIFACT Profile"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the EDI profile's purpose",
+      "examples": ["X12 interchange profile for Acme Corp trading partner"]
+    },
+    "fileType": {
+      "type": "string",
+      "enum": ["edix12", "edifact"],
+      "description": "The EDI standard this profile is configured for. Immutable after creation.",
+      "examples": ["edix12", "edifact"]
+    },
+    "tpInterchangeId": {
+      "type": "string",
+      "description": "Trading partner's interchange identifier (ISA06 for X12, UNB sender/receiver ID for EDIFACT)",
+      "examples": ["ACMECORP", "5412345678901"]
+    },
+    "myInterchangeId": {
+      "type": "string",
+      "description": "Your (sender/receiver) interchange identifier",
+      "examples": ["MYCOMPANY", "1234567890123"]
+    },
+    "controlNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 999999999,
+      "default": 1,
+      "description": "Current interchange control number. Incremented with each interchange sent.",
+      "examples": [1, 1001]
+    },
+    "isa01": {
+      "type": "string",
+      "enum": ["00", "01", "02", "03", "04", "05"],
+      "description": "X12 ISA01 \u2014 Authorization Information Qualifier.",
+      "examples": ["00"]
+    },
+    "isa02": {
+      "type": "string",
+      "description": "X12 ISA02 - Authorization Information (10 characters)",
+      "examples": ["          "]
+    },
+    "isa03": {
+      "type": "string",
+      "enum": ["00", "01"],
+      "description": "X12 ISA03 \u2014 Security Information Qualifier.",
+      "examples": ["00"]
+    },
+    "isa04": {
+      "type": "string",
+      "description": "X12 ISA04 - Security Information (10 characters)",
+      "examples": ["          "]
+    },
+    "tpIdQualifier": {
+      "type": "string",
+      "description": "Trading partner ID qualifier. For X12 (ISA05/ISA07): 01 (DUNS), 08 (UCC EDI), 12 (phone), 14 (DUNS+4), ZZ (mutually defined), etc. For EDIFACT: 14 (EAN), ZZZ (mutually defined), etc.",
+      "examples": ["ZZ", "01", "14"]
+    },
+    "myIdQualifier": {
+      "type": "string",
+      "description": "Your (sender/receiver) ID qualifier. Same enum as tpIdQualifier.",
+      "examples": ["ZZ", "01", "14"]
+    },
+    "isa11": {
+      "type": "string",
+      "description": "X12 ISA11 - Repetition Separator (or Interchange Control Standards Identifier in older versions). Single character.",
+      "examples": ["U", "^"]
+    },
+    "isa12": {
+      "type": "string",
+      "description": "X12 ISA12 - Interchange Control Version Number (5 characters)",
+      "examples": ["00401", "00501"]
+    },
+    "isa14": {
+      "type": "string",
+      "enum": ["0", "1"],
+      "description": "X12 ISA14 \u2014 Acknowledgment Requested.",
+      "examples": ["0", "1"]
+    },
+    "isa15": {
+      "type": "string",
+      "enum": ["P", "T"],
+      "description": "X12 ISA15 \u2014 Interchange Usage Indicator.",
+      "examples": ["P", "T"]
+    },
+    "isa16": {
+      "type": "string",
+      "description": "X12 ISA16 - Component Element Separator. Single character.",
+      "examples": [">", ":"]
+    },
+    "tpGroupId": {
+      "type": "string",
+      "description": "X12 GS02 - Trading partner's application sender/receiver code",
+      "examples": ["ACME"]
+    },
+    "myGroupId": {
+      "type": "string",
+      "description": "X12 GS03 - Your application sender/receiver code",
+      "examples": ["MYAPP"]
+    },
+    "gs07": {
+      "type": "string",
+      "enum": ["X", "T"],
+      "description": "X12 GS07 \u2014 Responsible Agency Code.",
+      "examples": ["X"]
+    },
+    "gs08": {
+      "type": "string",
+      "description": "X12 GS08 - Version/Release/Industry Identifier Code",
+      "examples": ["004010", "005010"]
+    },
+    "unb010_0001": {
+      "type": "string",
+      "enum": ["UNOA", "UNOB", "UNOC", "UNOD", "UNOE", "UNOF"],
+      "description": "EDIFACT UNB S001/0001 - Syntax Identifier.",
+      "examples": ["UNOB"]
+    },
+    "unb010_0002": {
+      "type": "string",
+      "enum": ["1", "2", "3"],
+      "description": "EDIFACT UNB S001/0002 - Syntax Version Number.",
+      "examples": ["3"]
+    },
+    "versionNumber": {
+      "type": "string",
+      "description": "EDIFACT message version number (e.g., \"D\" for directory).",
+      "examples": ["D"]
+    },
+    "releaseNumber": {
+      "type": "string",
+      "description": "EDIFACT message release number.",
+      "examples": ["96A", "01B", "14A"]
+    },
+    "controllingAgency": {
+      "type": "string",
+      "description": "EDIFACT controlling agency code.",
+      "examples": ["UN", "EC", "AA"]
+    }
+  },
+  "required": ["name", "fileType"]
+}

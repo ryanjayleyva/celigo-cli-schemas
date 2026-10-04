@@ -1,0 +1,1346 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo tool",
+  "type": "object",
+  "description": "Request schema for creating or updating a tool. Tools are reusable processing\nunits that encapsulate input transformation, conditional routing, and output\nmapping logic within an integration.",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable name for the tool.\n\nDisplayed in the UI and used to identify the tool's purpose.\n",
+      "examples": ["Enrich Customer Data", "Validate Order"],
+      "x-celigo-canon": {
+        "decision": "stricter-than-server",
+        "reason": "Server requires a non-empty name on create and caps its length, but accepts an empty name on update; the spec requires a non-empty name on every write.",
+        "method": "live-probe",
+        "verified": "2026-07-05"
+      }
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 5120,
+      "description": "Optional detailed description of what the tool does.\n\nUse this to document the tool's purpose, expected inputs/outputs,\nand any special considerations.\n",
+      "examples": [
+        "Validates and enriches incoming customer records by looking up account status and applying business rules."
+      ]
+    },
+    "_integrationId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "integrations",
+      "description": "Reference to the integration this tool belongs to.\n\nEvery tool must be associated with an integration. The integration\ndetermines the scope and access controls for the tool.\n",
+      "examples": ["5f8d43a1b9e5a80011a35f2c"],
+      "x-celigo-ai-guidance": [
+        "To move the tool to a different integration, PUT with a changed _integrationId; the platform registers the tool's step connections in the target integration on save."
+      ]
+    },
+    "input": {
+      "type": "object",
+      "description": "Configuration for the tool's input processing.\n\nDefines the expected input structure, optional transformations to apply\nbefore routing, and mock data for testing.\n",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Display name for the input configuration.\n",
+          "examples": ["Customer Record", "Order Payload"]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 10240,
+          "description": "Description of the expected input data and its purpose.\n",
+          "examples": ["Incoming customer record from the CRM system"]
+        },
+        "schema": {
+          "type": "object",
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "User-authored JSON Schema payload \u2014 interiors are freeform by design; do not model keys.",
+            "method": "documented-contract",
+            "verified": "2026-07-03"
+          },
+          "description": "JSON Schema describing the expected input data structure.\n\nUsed for validation, documentation, and AI-assisted tooling.\nMust be a valid JSON Schema document.\n",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "type": "object",
+              "properties": {
+                "customerId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                }
+              }
+            }
+          ]
+        },
+        "schemaMode": {
+          "type": "string",
+          "enum": ["manual", "json"],
+          "x-enumDescriptions": {
+            "manual": "The input schema was built field-by-field in the visual editor",
+            "json": "The input schema was pasted or edited as raw JSON"
+          },
+          "description": "How `schema` was authored in the UI. Editor state only \u2014 it does not change how\nthe schema validates invocation input. Present when set.",
+          "examples": ["json"]
+        },
+        "transform": {
+          "type": "object",
+          "description": "Configuration for transforming data during processing operations. This object enables\nreshaping of records.\n\n**Transformation capabilities**\n\nCeligo's transformation engine offers powerful features for data manipulation:\n- Precise field mapping with JSONPath expressions\n- Support for any level of nested arrays\n- Formula-based field value generation\n- Dynamic references to flow and integration settings\n\n**Implementation approaches**\n\nThere are two distinct transformation mechanisms available:\n\n**Rule-Based Transformation (`type: \"expression\"`)**\n- **Best For**: Most transformation scenarios from simple to complex\n- **Capabilities**: Field mapping, formula calculations, lookups, nested data handling\n- **Advantages**: Visual configuration, no coding required, intuitive interface\n- **Configuration**: Define rules in the `expression` object\n- **Use When**: You have clear mapping requirements or need to reshape data structure\n\n**Script-Based Transformation (`type: \"script\"`)**\n- **Best For**: Extremely complex logic or proprietary algorithms\n- **Capabilities**: Full programmatic control, custom processing, complex business rules\n- **Advantages**: Maximum flexibility, can implement any transformation logic\n- **Configuration**: Reference a script in the `script` object\n- **Use When**: Visual transformation tools aren't sufficient for your use case\n",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Determines which transformation mechanism to use. This choice affects which properties\nmust be configured and how transformation logic is implemented.\n\n**Available types**\n\n**Rule-Based Transformation (`\"expression\"`)**\n- **Required Config**: The `expression` object with mapping definitions\n- **Behavior**: Applies declarative rules to reshape data\n- **Best For**: Most transformation scenarios from simple to complex\n- **Advantages**: Visual configuration, no coding required\n\n**Script-Based Transformation (`\"script\"`)**\n- **Required Config**: The `script` object with _scriptId and function\n- **Behavior**: Executes custom JavaScript to transform data\n- **Best For**: Extremely complex logic or proprietary algorithms\n- **Advantages**: Maximum flexibility, can implement any logic\n\n**Implementation guidance**\n\n1. For standard data transformations, use `\"expression\"`\n2. For complex logic or specialized processing, use `\"script\"`\n3. When selecting a type, you must configure the corresponding object:\n    - `type: \"expression\"` requires the `expression` object\n    - `type: \"script\"` requires the `script` object\n",
+              "enum": ["expression", "script"],
+              "x-enumDescriptions": {
+                "expression": "Rule-based transformation using declarative mapping definitions.",
+                "script": "Script-based transformation using custom JavaScript logic."
+              },
+              "examples": ["expression", "script"]
+            },
+            "expression": {
+              "type": "object",
+              "description": "Configuration for declarative rule-based transformations. This object enables reshaping data\nwithout requiring custom code.\n\n**Usage context**\n\nThis object is REQUIRED when `transform.type` is set to \"expression\" and should not be\nconfigured otherwise. It provides a standardized way to define transformation rules that\ncan map, modify, and generate data elements.\n\n**Implementation guidance**\n\nThe expression system uses a rule-based approach where:\n- Field mappings define how input data is transformed to target fields\n- Formulas can be used to calculate or generate new values\n- Lookups can enrich data by fetching related information\n- Mode determines how records are processed (create new or modify existing)\n",
+              "properties": {
+                "version": {
+                  "type": "string",
+                  "description": "Version of the expression format. Determines which rules\nproperty contains the transformation logic.\n",
+                  "enum": ["1", "2"],
+                  "x-enumDescriptions": {
+                    "1": "Legacy format. Rules are in the `rules` array (array of arrays of extract/generate objects).",
+                    "2": "Current format. Rules are in the `rulesTwoDotZero` object with mode, mappings, and lookups."
+                  },
+                  "examples": ["1", "2"]
+                },
+                "rules": {
+                  "type": "array",
+                  "description": "Transformation rules for version 1 expressions. An array of\nrule groups; each group is an array of field-mapping objects.\nMost transforms have a single group. Present when `version`\nis `\"1\"`. The output record contains ONLY the generated\nfields \u2014 every unmapped field is dropped (v1 has no\nequivalent of Transform 2.0's `modify` mode), and the\nrecord's trace key does not survive the rebuild.\n",
+                  "x-celigo-ai-guidance": [
+                    "v1 rules REPLACE the record: a one-field rule group drops\nevery other field, silently breaking downstream filters,\nrouter branch rules, and templates that referenced the\ndropped fields. Either map every field downstream logic\nneeds forward, or author Transform 2.0 with\n``mode: \"modify\"`` instead."
+                  ],
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "extract": {
+                          "type": "string",
+                          "description": "Source field path to read from. Supports multiple\nsyntaxes: bare field names (`id`), dot notation\n(`fulfillment.shipment_id`), slash-prefixed paths\nfor XML (`/FeedProcessingStatus`), wildcards (`*.id`,\n`*.[Internal ID]`), and array indexing (`SDF[0]`).\n"
+                        },
+                        "generate": {
+                          "type": "string",
+                          "description": "Target field name to write to. Typically a bare name\n(`id`) or dot path (`SDF.Filter.ID`).\n"
+                        },
+                        "key": {
+                          "type": "string",
+                          "description": "Auto-generated identifier for this rule, used by the\nUI to track individual rules for editing and reordering.\n"
+                        }
+                      },
+                      "required": ["extract", "generate"]
+                    }
+                  }
+                },
+                "rulesTwoDotZero": {
+                  "type": "object",
+                  "description": "Configuration for version 2 transformation rules. This object contains the core logic\nfor how data is mapped, enriched, and transformed.\n\n**Capabilities**\n\nTransformation 2.0 provides:\n- Precise field mapping with JSONPath expressions\n- Support for deeply nested data structures\n- Formula-based field generation\n- Dynamic lookups for data enrichment\n- Multiple operating modes to fit different scenarios\n",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "description": "Transformation mode that determines how records are handled during processing.\n\n**Available modes**\n\n**Create Mode (`\"create\"`)**\n- **Behavior**: Builds entirely new output records from inputs\n- **Use When**: Output structure differs significantly from input\n- **Advantage**: Clean slate approach, no field inheritance\n\n**Modify Mode (`\"modify\"`)**\n- **Behavior**: Makes targeted edits to existing records\n- **Use When**: Output structure should remain similar to input\n- **Advantage**: Preserves unmapped fields from the original record\n",
+                      "enum": ["create", "modify"],
+                      "x-enumDescriptions": {
+                        "create": "Builds entirely new output records from inputs, ignoring unmapped fields.",
+                        "modify": "Makes targeted edits to existing records, preserving unmapped fields."
+                      },
+                      "x-celigo-ai-guidance": [
+                        "On a grouped record (the export groups rows, so the record is an\narray) only `create` can author output \u2014 build it from the rows with\n`$[0].field`, `$[*].field`, or a `buildArrayHelper` over `$[*]`.\n`modify` has no object to overlay onto an array: the record passes\nthrough untouched and the processor reports success. Either mode\nreshapes the inside of one record; neither changes how many records\nthe page carries (that is the export's `preSavePage` hook) or whether\nthe export groups at all (that is its grouping setting)."
+                      ],
+                      "examples": ["create", "modify"]
+                    },
+                    "mappings": {
+                      "type": "array",
+                      "description": "Array of field mapping configurations for transforming data from one format into another.\n\n**Guidance**\n\nThis schema is designed around RECURSION as its core architectural principle. Understanding this recursive\nnature is essential for building effective mappings:\n\n1. The schema is self-referential by design - a mapping can contain nested mappings of the same structure\n2. Complex data structures (nested objects, arrays of objects, arrays of arrays of objects) are ALL\n   handled through this recursive pattern\n3. Each mapping handles one level of the data structure; deeper levels are handled by nested mappings\n\nWhen generating mappings programmatically:\n- For simple fields (string, number, boolean): Create single mapping objects\n- For objects: Create a parent mapping with nested 'mappings' array containing child field mappings\n- For arrays: Use 'buildArrayHelper' with extract paths defining array inputs and\n  recursive 'mappings' to define object structures\n\nThe system will process these nested structures recursively during runtime, ensuring proper construction\nof complex hierarchical data while maintaining excellent performance.\n",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "generate": {
+                            "type": "string",
+                            "description": "**Purpose**\nDefines the target field name in the output object/record.\n\n**Guidance**\nThis is the PRIMARY FIELD that identifies the output property being created:\n\n- For regular fields: Set to the exact property name (e.g., \"firstName\", \"price\", \"isActive\")\n- For object fields: Set to the object property name, then add child mappings in the 'mappings' array\n- For array fields: Set to the array property name, then configure 'buildArrayHelper'\n- For arrays within arrays: Leave EMPTY for the inner array mappings, as they don't have field names\n\nIMPORTANT: Do NOT use dot notation (e.g., \"customer.firstName\") in this field. Instead, create proper\nhierarchical structure with nested mappings:\n```json\n{\n  \"generate\": \"customer\",\n  \"dataType\": \"object\",\n  \"status\": \"Active\",\n  \"mappings\": [\n    {\"generate\": \"firstName\", \"dataType\": \"string\", \"extract\": \"$.name.first\", \"status\": \"Active\"}\n  ]\n}\n```\n\nWhen parsing existing mappings, empty 'generate' fields almost always indicate inner array structures\nwithin a parent array.\n",
+                            "examples": ["name", "address", "items"]
+                          },
+                          "dataType": {
+                            "type": "string",
+                            "description": "**Purpose**\nExplicitly declares the data type of the output field, controlling how data is processed and structured.\n\n**Guidance**\nThis is a REQUIRED field that fundamentally determines mapping behavior:\n\n**Simple Types (direct value mapping)**\n- `string`: Text values, converts other types to string representation\n- `number`: Numeric values, attempts conversion from strings\n- `boolean`: True/false values, converts truthy/falsy values\n\nDates are represented as strings \u2014 use `string` for date fields and\ndrive the parsing/formatting through the `extractDateFormat` /\n`generateDateFormat` / `extractDateTimezone` / `generateDateTimezone`\nfields. There is no separate `date` enum value.\n\n**Complex Types (require additional configuration)**\n- `object`: Creates a nested object. REQUIRES child mappings in the 'mappings' array\n\n**Array Types**\n- `stringarray`: Array of strings\n- `numberarray`: Array of numbers\n- `booleanarray`: Array of booleans\n- `objectarray`: Array of objects (most common array type)\n- `arrayarray`: Array of arrays (for matrix/table structures)\n\nArray dataTypes can be populated two ways: pass a source array through\nunchanged via `extract` alone (when the source is already an array of\nthe right shape), or construct/iterate via `buildArrayHelper`.\n\nIMPORTANT: The dataType controls which additional fields are relevant:\n- For date-like string fields: extractDateFormat, generateDateFormat, etc. become relevant\n- For object types: 'mappings' array becomes relevant\n- For array types: `buildArrayHelper` is one option (see above)\n\nWhen analyzing existing mappings or generating new ones, always check dataType first\nto understand what additional fields should be present.\n",
+                            "x-celigo-ai-guidance": [
+                              "Missing `dataType` is rejected at save with validation error\n`[mandatory_destination_datatype] Destination datatype is a\nrequired field.` When in doubt, use `\"string\"` \u2014 it accepts\nany source value and the runtime will coerce it."
+                            ],
+                            "enum": [
+                              "string",
+                              "number",
+                              "boolean",
+                              "object",
+                              "stringarray",
+                              "numberarray",
+                              "booleanarray",
+                              "objectarray",
+                              "arrayarray"
+                            ],
+                            "x-enumDescriptions": {
+                              "string": "Text values; converts other types to their string representation.",
+                              "number": "Numeric values; attempts conversion from strings.",
+                              "boolean": "True/false values; converts truthy/falsy values.",
+                              "object": "Nested object that requires child mappings in the `mappings` array.",
+                              "stringarray": "Array of string values.",
+                              "numberarray": "Array of numeric values.",
+                              "booleanarray": "Array of boolean values.",
+                              "objectarray": "Array of objects, the most common array type.",
+                              "arrayarray": "Array of arrays, used for matrix or table structures."
+                            },
+                            "examples": [
+                              "string",
+                              "number",
+                              "object",
+                              "objectarray"
+                            ]
+                          },
+                          "extract": {
+                            "type": "string",
+                            "description": "**Purpose**\nDefines how to retrieve data from the input record to populate the output field.\n\n**Guidance**\nThis field supports THREE DISTINCT PATTERNS that are easily distinguished:\n\n**1. json Path Syntax**\n- MUST start with '$' \u2014 the record root. An object record is addressed as\n  '$.field'; a grouped (array) record as '$[0].field' / '$[*].field'\n- Used for precisely targeting data in structured JSON objects\n- Examples: '$.customer.firstName', '$.items[0].price', '$.addresses[*].street',\n  '$[*].Tax' (every row of a grouped record)\n- Wildcards like [*] extract multiple values/objects\n\n```json\n\"extract\": \"$.customer.addresses[*]\"  // Extracts all addresses\n```\n\n**2. Handlebars Template Syntax**\n- Contains '{{' and '}}' pattern\n- Evaluated by the AFE 2.0 handlebars template engine\n- Can include logic, formatting, and computation\n- Access input record fields with {{record.fieldName}} notation; a grouped\n  (array) record binds as `rows` instead \u2014 {{rows.0.fieldName}} / {{#each rows}}\n- Examples: \"{{record.firstName}} {{record.lastName}}\", \"{{#if record.isActive}}Active{{else}}Inactive{{/if}}\"\n- Valid on `object`, `objectarray`, and primitive-array dataTypes as\n  well as scalars \u2014 the rendered template output must parse into the\n  declared shape\n\n```json\n\"extract\": \"{{record.price}} {{record.currency}}\"  // Combines two fields\n```\n\n**3. Hard-Coded Value (literal string)**\n- Does NOT start with '$'\n- Does NOT contain handlebars '{{' syntax\n- System treats it as a literal string value\n- VERY COMMON for setting static/constant values\n- Examples: \"Active\", \"USD\", \"Completed\", \"true\"\n\n```json\n\"extract\": \"primary\"  // Sets field value to the literal string \"primary\"\n\"extract\": \"true\"     // Sets field value to the literal string \"true\"\n\"extract\": \"N/A\"      // Sets field value to the literal string \"N/A\"\n```\n\nThis third pattern is the simplest and most efficient way to set hard-coded values in your mappings.\nAI agents should use this pattern whenever a field needs a static value that doesn't come from\nthe input record or require computation.\n\n**Important implementation details**\n\n- JSON path patterns ALWAYS execute from the TOP-LEVEL root of the input record\n- The system maintains this context even in deeply nested mappings\n- For object mappings without child mappings, extract should return a complete object\n- When both extract and mappings are defined for objects, extract is applied first\n- The root is the record as it arrives: an object record roots at `$.field`; a\n  grouped record (an array of rows \u2014 grouped exports, file key columns, NetSuite\n  grouped saved searches) roots at the array, so its rows are addressed as\n  `$[0].field` (one row) or `$[*].field` (every row). A root that contradicts the\n  record's shape resolves to nothing without an error.\n\nFor most simple field-to-field mappings, prefer JSON path syntax for its clarity and performance.\nFor hard-coded values, simply use the literal string as the extract value.\n",
+                            "x-celigo-ai-guidance": [
+                              "## GROUPED (ARRAY) RECORDS\nDecide the JSONPath root from the record's shape before writing\nany extract. When the record is an array of rows, `$.field`,\n`$.properties.field` and `$.rows[*].field` all resolve to\nnothing \u2014 the processor still reports success and the request\nbody ships as `{}`. Address rows as `$[0].field` (that row's\nvalue, typed) or `$[*].field` (every row: joined with commas\ninto a `string` destination; rejected with\n`incompatible_destination_conversion` into a `number`\ndestination). Column labels with spaces work as\n`$[*][Order Number]`, `$[*].[Order Number]`, or\n`$[*]['Order Number']`. For one destination element per row\nthe two array kinds take different helper forms: a primitive\narray (`stringarray` / `numberarray`) uses `buildArrayHelper:\n[{\"extract\": \"$[*].field\"}]`; an `objectarray` uses\n`buildArrayHelper: [{\"extract\": \"$[*]\", \"mappings\": [...]}]`\nwith the children addressing the row relatively (`$.field`,\n`{{rows.field}}`). An `extract` placed directly on the\narray-typed field yields nothing. Handlebars\nextracts bind the array record as `rows` (`{{rows.0.field}}`),\nan object record as `record`. The reverse holds too: `$[*]` on\nan object record iterates the object's values, not rows.",
+                              "## SIZE LIMIT\nThe platform's import save validator caps this field at **1024\ncharacters**.  Saves with a longer `extract` are rejected\nwith `[size_limit_exceeded] The maximum size of the field:\nmappings.<index>.extract in the Import document should be\n1024 characters`.  This typically only matters for\nHandlebars templates that build complex strings inline -- if\na template is approaching the cap, prefer one of:\n\n- **Decompose into nested mappings** (set `dataType:\n  \"object\"` and use child `mappings` -- each child gets\n  its own 1024-char budget).\n- **Move the logic to a `preMap` hook** so the heavy\n  transformation runs in script and the mapping just reads\n  `record.<computed>`.\n- **Use a lookup** (`lookupName` + a small `lookups` entry)\n  for value translation that would otherwise need a long\n  `{{#if ...}}{{else if ...}}` chain."
+                            ],
+                            "examples": [
+                              "$.fullName",
+                              "{{record.fullName}}",
+                              "primary",
+                              "$.lineItems[*].unitPrice"
+                            ]
+                          },
+                          "extractDateFormat": {
+                            "type": "string",
+                            "description": "Specifies the format pattern of the input date string to ensure proper parsing.\n\nUsed on string-typed mappings whose `extract` yields a date. Uses\nMoment.js-compatible formatting tokens to describe how the incoming date\nstring is structured.\n",
+                            "examples": [
+                              "YYYY-MM-DD",
+                              "MM/DD/YYYY",
+                              "DD-MMM-YYYY HH:mm:ss"
+                            ]
+                          },
+                          "extractDateTimezone": {
+                            "type": "string",
+                            "description": "Specifies the timezone of the input date string using Olson/IANA timezone identifiers.\n\nUsed on string-typed mappings whose `extract` yields a date; tells the system\nhow to interpret timestamp values from the input system.\n",
+                            "examples": [
+                              "UTC",
+                              "America/New_York",
+                              "Europe/London"
+                            ]
+                          },
+                          "generateDateFormat": {
+                            "type": "string",
+                            "description": "Specifies the output format pattern when generating a date string or converting\nfrom a Date type to String type.\n\nUses Moment.js-compatible formatting tokens to define the structure of the resulting\ndate string.\n",
+                            "examples": [
+                              "YYYY-MM-DD",
+                              "MM/DD/YYYY",
+                              "DD-MMM-YYYY HH:mm:ss"
+                            ]
+                          },
+                          "generateDateTimezone": {
+                            "type": "string",
+                            "description": "Specifies the timezone to apply when generating or converting timestamp values\nusing Olson/IANA timezone identifiers.\n\nControls timezone conversion when producing date output.\n",
+                            "examples": [
+                              "UTC",
+                              "America/New_York",
+                              "Europe/London"
+                            ]
+                          },
+                          "default": {
+                            "type": ["string", "null"],
+                            "description": "Specifies a fallback value to use when extract returns empty/null or when conditional\nlogic fails and no other mapping supplies a value.\n\nExplicit JSON `null` is itself a valid fallback: the destination field is written as\nJSON null when the extract yields nothing (the Mapper UI's \"Use null as default value\"\naction). Omitting the key entirely means no fallback \u2014 the field is left out of the\noutput when the extract is empty (the UI's \"Do nothing\" action).\n",
+                            "x-celigo-ai-guidance": [
+                              "`\"default\": null` and `\"default\": \"\"` are distinct saved values, not\nabsent keys: null renders the destination field as JSON null and the\nempty string renders it as `\"\"` when the extract yields nothing.\nPreserve them verbatim when editing or migrating a mapping \u2014 dropping\nthe key changes runtime behavior from \"use null/empty string as\ndefault value\" to \"do nothing\" (field omitted from the output)."
+                            ],
+                            "examples": ["N/A", "0", "false"]
+                          },
+                          "lookupName": {
+                            "type": "string",
+                            "description": "**Purpose**\nReferences a lookup table for transforming values during the mapping process.\n\n**Usage**\n\nThe lookupName refers to a named lookup defined in the lookups array of the same resource.\n\n```json\n{\n  \"generate\": \"countryName\",\n  \"dataType\": \"string\",\n  \"extract\": \"$.countryCode\",\n  \"lookupName\": \"countryCodeToName\"\n}\n```\n\nDuring processing, the system:\n1. Extracts the value from the input record (e.g., \"US\")\n2. Finds the lookup table with the specified name\n3. Uses the extracted value as a key in the lookup\n4. Returns the corresponding value (e.g., \"United States\")\n\n**Benefits**\n\n- **Standardization**: Ensures consistent value translation across mappings\n- **Centralization**: Define translations once and reference them in multiple places\n- **Maintainability**: Update all mappings by changing the lookup definition\n- **Readability**: Makes mappings more descriptive and self-documenting\n\nThe specific lookup capabilities depend on the context where mappings are used.\n",
+                            "examples": [
+                              "countryCodeToName",
+                              "statusMapping",
+                              "departmentCodes"
+                            ]
+                          },
+                          "description": {
+                            "type": "string",
+                            "description": "Optional free-text annotation that appears in the Mapper sidebar to provide context about\nthe mapping's purpose for collaboration and documentation.\n\nHas no functional impact on the mapping behavior.\n",
+                            "examples": [
+                              "Maps customer name",
+                              "Converts price to target currency",
+                              "Formats date for target system"
+                            ]
+                          },
+                          "sourceDataType": {
+                            "type": "string",
+                            "description": "Declares the JSON type of the value produced by `extract`, before any\nconversion to `dataType`. Same enum as `dataType`. Set on leaf mappings\nonly \u2014 parent mappings (with child `mappings` or `buildArrayHelper`)\nhave no extracted value of their own; the children carry their own\n`sourceDataType`.\n\nFor date fields use `string` (JSON represents dates as strings); the\nparsing/formatting lives in `extractDateFormat` / `generateDateFormat` /\n`extractDateTimezone` / `generateDateTimezone`.\n",
+                            "enum": [
+                              "string",
+                              "number",
+                              "boolean",
+                              "object",
+                              "stringarray",
+                              "numberarray",
+                              "booleanarray",
+                              "objectarray",
+                              "arrayarray"
+                            ],
+                            "x-enumDescriptions": {
+                              "string": "Source value is a text string.",
+                              "number": "Source value is numeric.",
+                              "boolean": "Source value is true or false.",
+                              "object": "Source value is a JSON object.",
+                              "stringarray": "Source value is an array of strings.",
+                              "numberarray": "Source value is an array of numbers.",
+                              "booleanarray": "Source value is an array of booleans.",
+                              "objectarray": "Source value is an array of objects.",
+                              "arrayarray": "Source value is an array of arrays."
+                            },
+                            "examples": [
+                              "string",
+                              "number",
+                              "boolean",
+                              "object"
+                            ]
+                          },
+                          "mappings": {
+                            "type": "array",
+                            "description": "**Purpose**\nEnables recursive definition of nested object structures through child mapping objects.\n\n**Guidance**\nThis is the KEY FIELD that implements the recursive pattern at the core of this schema:\n\n**When to Use**\n- REQUIRED when dataType = \"object\" (unless you are copying an entire object from the input record)\n- REQUIRED in buildArrayHelper.mappings when defining complex object array elements\n- NEVER used with simple types (string, number, boolean, date)\n\n**Behavior**\n- Each mapping in this array becomes a property of the parent object\n- The full Mappings schema is repeated recursively at each level\n- Can be nested to any depth for complex hierarchical structures\n\n**Context Handling**\n- Each level of nesting changes the mapping CONTEXT for 'generate'\n- The extraction CONTEXT always remains the original input record\n- This means child mappings can pull data from anywhere in the input record\n\n**Common Patterns**\n\n**Nested Objects**\n```json\n{\n  \"generate\": \"customer\",\n  \"dataType\": \"object\",\n  \"mappings\": [\n    {\n      \"generate\": \"contact\",\n      \"dataType\": \"object\",\n      \"mappings\": [\n        {\"generate\": \"email\", \"dataType\": \"string\", \"extract\": \"$.customerEmail\"}\n      ]\n    }\n  ]\n}\n```\n\n**Multiple Fields in Object**\n```json\n{\n  \"generate\": \"address\",\n  \"dataType\": \"object\",\n  \"mappings\": [\n    {\"generate\": \"street\", \"dataType\": \"string\", \"extract\": \"$.address.line1\"},\n    {\"generate\": \"city\", \"dataType\": \"string\", \"extract\": \"$.address.city\"},\n    {\"generate\": \"country\", \"dataType\": \"string\", \"extract\": \"$.address.country\"}\n  ]\n}\n```\n\nIMPORTANT: When analyzing or generating mappings, ALWAYS check if parent.dataType = \"object\"\nor if you're inside buildArrayHelper.mappings for objectarray elements. These are the only\nvalid contexts for the mappings array.\n",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "generate": {
+                                  "type": "string",
+                                  "description": "**Purpose**\nDefines the target field name in the output object/record.\n\n**Guidance**\nThis is the PRIMARY FIELD that identifies the output property being created:\n\n- For regular fields: Set to the exact property name (e.g., \"firstName\", \"price\", \"isActive\")\n- For object fields: Set to the object property name, then add child mappings in the 'mappings' array\n- For array fields: Set to the array property name, then configure 'buildArrayHelper'\n- For arrays within arrays: Leave EMPTY for the inner array mappings, as they don't have field names\n\nIMPORTANT: Do NOT use dot notation (e.g., \"customer.firstName\") in this field. Instead, create proper\nhierarchical structure with nested mappings:\n```json\n{\n  \"generate\": \"customer\",\n  \"dataType\": \"object\",\n  \"status\": \"Active\",\n  \"mappings\": [\n    {\"generate\": \"firstName\", \"dataType\": \"string\", \"extract\": \"$.name.first\", \"status\": \"Active\"}\n  ]\n}\n```\n\nWhen parsing existing mappings, empty 'generate' fields almost always indicate inner array structures\nwithin a parent array.\n",
+                                  "examples": ["name", "address", "items"]
+                                },
+                                "dataType": {
+                                  "type": "string",
+                                  "description": "**Purpose**\nExplicitly declares the data type of the output field, controlling how data is processed and structured.\n\n**Guidance**\nThis is a REQUIRED field that fundamentally determines mapping behavior:\n\n**Simple Types (direct value mapping)**\n- `string`: Text values, converts other types to string representation\n- `number`: Numeric values, attempts conversion from strings\n- `boolean`: True/false values, converts truthy/falsy values\n\nDates are represented as strings \u2014 use `string` for date fields and\ndrive the parsing/formatting through the `extractDateFormat` /\n`generateDateFormat` / `extractDateTimezone` / `generateDateTimezone`\nfields. There is no separate `date` enum value.\n\n**Complex Types (require additional configuration)**\n- `object`: Creates a nested object. REQUIRES child mappings in the 'mappings' array\n\n**Array Types**\n- `stringarray`: Array of strings\n- `numberarray`: Array of numbers\n- `booleanarray`: Array of booleans\n- `objectarray`: Array of objects (most common array type)\n- `arrayarray`: Array of arrays (for matrix/table structures)\n\nArray dataTypes can be populated two ways: pass a source array through\nunchanged via `extract` alone (when the source is already an array of\nthe right shape), or construct/iterate via `buildArrayHelper`.\n\nIMPORTANT: The dataType controls which additional fields are relevant:\n- For date-like string fields: extractDateFormat, generateDateFormat, etc. become relevant\n- For object types: 'mappings' array becomes relevant\n- For array types: `buildArrayHelper` is one option (see above)\n\nWhen analyzing existing mappings or generating new ones, always check dataType first\nto understand what additional fields should be present.\n",
+                                  "x-celigo-ai-guidance": [
+                                    "Missing `dataType` is rejected at save with validation error\n`[mandatory_destination_datatype] Destination datatype is a\nrequired field.` When in doubt, use `\"string\"` \u2014 it accepts\nany source value and the runtime will coerce it."
+                                  ],
+                                  "enum": [
+                                    "string",
+                                    "number",
+                                    "boolean",
+                                    "object",
+                                    "stringarray",
+                                    "numberarray",
+                                    "booleanarray",
+                                    "objectarray",
+                                    "arrayarray"
+                                  ],
+                                  "x-enumDescriptions": {
+                                    "string": "Text values; converts other types to their string representation.",
+                                    "number": "Numeric values; attempts conversion from strings.",
+                                    "boolean": "True/false values; converts truthy/falsy values.",
+                                    "object": "Nested object that requires child mappings in the `mappings` array.",
+                                    "stringarray": "Array of string values.",
+                                    "numberarray": "Array of numeric values.",
+                                    "booleanarray": "Array of boolean values.",
+                                    "objectarray": "Array of objects, the most common array type.",
+                                    "arrayarray": "Array of arrays, used for matrix or table structures."
+                                  },
+                                  "examples": [
+                                    "string",
+                                    "number",
+                                    "object",
+                                    "objectarray"
+                                  ]
+                                },
+                                "extract": {
+                                  "type": "string",
+                                  "description": "**Purpose**\nDefines how to retrieve data from the input record to populate the output field.\n\n**Guidance**\nThis field supports THREE DISTINCT PATTERNS that are easily distinguished:\n\n**1. json Path Syntax**\n- MUST start with '$' \u2014 the record root. An object record is addressed as\n  '$.field'; a grouped (array) record as '$[0].field' / '$[*].field'\n- Used for precisely targeting data in structured JSON objects\n- Examples: '$.customer.firstName', '$.items[0].price', '$.addresses[*].street',\n  '$[*].Tax' (every row of a grouped record)\n- Wildcards like [*] extract multiple values/objects\n\n```json\n\"extract\": \"$.customer.addresses[*]\"  // Extracts all addresses\n```\n\n**2. Handlebars Template Syntax**\n- Contains '{{' and '}}' pattern\n- Evaluated by the AFE 2.0 handlebars template engine\n- Can include logic, formatting, and computation\n- Access input record fields with {{record.fieldName}} notation; a grouped\n  (array) record binds as `rows` instead \u2014 {{rows.0.fieldName}} / {{#each rows}}\n- Examples: \"{{record.firstName}} {{record.lastName}}\", \"{{#if record.isActive}}Active{{else}}Inactive{{/if}}\"\n- Valid on `object`, `objectarray`, and primitive-array dataTypes as\n  well as scalars \u2014 the rendered template output must parse into the\n  declared shape\n\n```json\n\"extract\": \"{{record.price}} {{record.currency}}\"  // Combines two fields\n```\n\n**3. Hard-Coded Value (literal string)**\n- Does NOT start with '$'\n- Does NOT contain handlebars '{{' syntax\n- System treats it as a literal string value\n- VERY COMMON for setting static/constant values\n- Examples: \"Active\", \"USD\", \"Completed\", \"true\"\n\n```json\n\"extract\": \"primary\"  // Sets field value to the literal string \"primary\"\n\"extract\": \"true\"     // Sets field value to the literal string \"true\"\n\"extract\": \"N/A\"      // Sets field value to the literal string \"N/A\"\n```\n\nThis third pattern is the simplest and most efficient way to set hard-coded values in your mappings.\nAI agents should use this pattern whenever a field needs a static value that doesn't come from\nthe input record or require computation.\n\n**Important implementation details**\n\n- JSON path patterns ALWAYS execute from the TOP-LEVEL root of the input record\n- The system maintains this context even in deeply nested mappings\n- For object mappings without child mappings, extract should return a complete object\n- When both extract and mappings are defined for objects, extract is applied first\n- The root is the record as it arrives: an object record roots at `$.field`; a\n  grouped record (an array of rows \u2014 grouped exports, file key columns, NetSuite\n  grouped saved searches) roots at the array, so its rows are addressed as\n  `$[0].field` (one row) or `$[*].field` (every row). A root that contradicts the\n  record's shape resolves to nothing without an error.\n\nFor most simple field-to-field mappings, prefer JSON path syntax for its clarity and performance.\nFor hard-coded values, simply use the literal string as the extract value.\n",
+                                  "x-celigo-ai-guidance": [
+                                    "## GROUPED (ARRAY) RECORDS\nDecide the JSONPath root from the record's shape before writing\nany extract. When the record is an array of rows, `$.field`,\n`$.properties.field` and `$.rows[*].field` all resolve to\nnothing \u2014 the processor still reports success and the request\nbody ships as `{}`. Address rows as `$[0].field` (that row's\nvalue, typed) or `$[*].field` (every row: joined with commas\ninto a `string` destination; rejected with\n`incompatible_destination_conversion` into a `number`\ndestination). Column labels with spaces work as\n`$[*][Order Number]`, `$[*].[Order Number]`, or\n`$[*]['Order Number']`. For one destination element per row\nthe two array kinds take different helper forms: a primitive\narray (`stringarray` / `numberarray`) uses `buildArrayHelper:\n[{\"extract\": \"$[*].field\"}]`; an `objectarray` uses\n`buildArrayHelper: [{\"extract\": \"$[*]\", \"mappings\": [...]}]`\nwith the children addressing the row relatively (`$.field`,\n`{{rows.field}}`). An `extract` placed directly on the\narray-typed field yields nothing. Handlebars\nextracts bind the array record as `rows` (`{{rows.0.field}}`),\nan object record as `record`. The reverse holds too: `$[*]` on\nan object record iterates the object's values, not rows.",
+                                    "## SIZE LIMIT\nThe platform's import save validator caps this field at **1024\ncharacters**.  Saves with a longer `extract` are rejected\nwith `[size_limit_exceeded] The maximum size of the field:\nmappings.<index>.extract in the Import document should be\n1024 characters`.  This typically only matters for\nHandlebars templates that build complex strings inline -- if\na template is approaching the cap, prefer one of:\n\n- **Decompose into nested mappings** (set `dataType:\n  \"object\"` and use child `mappings` -- each child gets\n  its own 1024-char budget).\n- **Move the logic to a `preMap` hook** so the heavy\n  transformation runs in script and the mapping just reads\n  `record.<computed>`.\n- **Use a lookup** (`lookupName` + a small `lookups` entry)\n  for value translation that would otherwise need a long\n  `{{#if ...}}{{else if ...}}` chain."
+                                  ],
+                                  "examples": [
+                                    "$.fullName",
+                                    "{{record.fullName}}",
+                                    "primary",
+                                    "$.lineItems[*].unitPrice"
+                                  ]
+                                },
+                                "extractDateFormat": {
+                                  "type": "string",
+                                  "description": "Specifies the format pattern of the input date string to ensure proper parsing.\n\nUsed on string-typed mappings whose `extract` yields a date. Uses\nMoment.js-compatible formatting tokens to describe how the incoming date\nstring is structured.\n",
+                                  "examples": [
+                                    "YYYY-MM-DD",
+                                    "MM/DD/YYYY",
+                                    "DD-MMM-YYYY HH:mm:ss"
+                                  ]
+                                },
+                                "extractDateTimezone": {
+                                  "type": "string",
+                                  "description": "Specifies the timezone of the input date string using Olson/IANA timezone identifiers.\n\nUsed on string-typed mappings whose `extract` yields a date; tells the system\nhow to interpret timestamp values from the input system.\n",
+                                  "examples": [
+                                    "UTC",
+                                    "America/New_York",
+                                    "Europe/London"
+                                  ]
+                                },
+                                "generateDateFormat": {
+                                  "type": "string",
+                                  "description": "Specifies the output format pattern when generating a date string or converting\nfrom a Date type to String type.\n\nUses Moment.js-compatible formatting tokens to define the structure of the resulting\ndate string.\n",
+                                  "examples": [
+                                    "YYYY-MM-DD",
+                                    "MM/DD/YYYY",
+                                    "DD-MMM-YYYY HH:mm:ss"
+                                  ]
+                                },
+                                "generateDateTimezone": {
+                                  "type": "string",
+                                  "description": "Specifies the timezone to apply when generating or converting timestamp values\nusing Olson/IANA timezone identifiers.\n\nControls timezone conversion when producing date output.\n",
+                                  "examples": [
+                                    "UTC",
+                                    "America/New_York",
+                                    "Europe/London"
+                                  ]
+                                },
+                                "default": {
+                                  "type": ["string", "null"],
+                                  "description": "Specifies a fallback value to use when extract returns empty/null or when conditional\nlogic fails and no other mapping supplies a value.\n\nExplicit JSON `null` is itself a valid fallback: the destination field is written as\nJSON null when the extract yields nothing (the Mapper UI's \"Use null as default value\"\naction). Omitting the key entirely means no fallback \u2014 the field is left out of the\noutput when the extract is empty (the UI's \"Do nothing\" action).\n",
+                                  "x-celigo-ai-guidance": [
+                                    "`\"default\": null` and `\"default\": \"\"` are distinct saved values, not\nabsent keys: null renders the destination field as JSON null and the\nempty string renders it as `\"\"` when the extract yields nothing.\nPreserve them verbatim when editing or migrating a mapping \u2014 dropping\nthe key changes runtime behavior from \"use null/empty string as\ndefault value\" to \"do nothing\" (field omitted from the output)."
+                                  ],
+                                  "examples": ["N/A", "0", "false"]
+                                },
+                                "lookupName": {
+                                  "type": "string",
+                                  "description": "**Purpose**\nReferences a lookup table for transforming values during the mapping process.\n\n**Usage**\n\nThe lookupName refers to a named lookup defined in the lookups array of the same resource.\n\n```json\n{\n  \"generate\": \"countryName\",\n  \"dataType\": \"string\",\n  \"extract\": \"$.countryCode\",\n  \"lookupName\": \"countryCodeToName\"\n}\n```\n\nDuring processing, the system:\n1. Extracts the value from the input record (e.g., \"US\")\n2. Finds the lookup table with the specified name\n3. Uses the extracted value as a key in the lookup\n4. Returns the corresponding value (e.g., \"United States\")\n\n**Benefits**\n\n- **Standardization**: Ensures consistent value translation across mappings\n- **Centralization**: Define translations once and reference them in multiple places\n- **Maintainability**: Update all mappings by changing the lookup definition\n- **Readability**: Makes mappings more descriptive and self-documenting\n\nThe specific lookup capabilities depend on the context where mappings are used.\n",
+                                  "examples": [
+                                    "countryCodeToName",
+                                    "statusMapping",
+                                    "departmentCodes"
+                                  ]
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "description": "Optional free-text annotation that appears in the Mapper sidebar to provide context about\nthe mapping's purpose for collaboration and documentation.\n\nHas no functional impact on the mapping behavior.\n",
+                                  "examples": [
+                                    "Maps customer name",
+                                    "Converts price to target currency",
+                                    "Formats date for target system"
+                                  ]
+                                },
+                                "sourceDataType": {
+                                  "type": "string",
+                                  "description": "Declares the JSON type of the value produced by `extract`, before any\nconversion to `dataType`. Same enum as `dataType`. Set on leaf mappings\nonly \u2014 parent mappings (with child `mappings` or `buildArrayHelper`)\nhave no extracted value of their own; the children carry their own\n`sourceDataType`.\n\nFor date fields use `string` (JSON represents dates as strings); the\nparsing/formatting lives in `extractDateFormat` / `generateDateFormat` /\n`extractDateTimezone` / `generateDateTimezone`.\n",
+                                  "enum": [
+                                    "string",
+                                    "number",
+                                    "boolean",
+                                    "object",
+                                    "stringarray",
+                                    "numberarray",
+                                    "booleanarray",
+                                    "objectarray",
+                                    "arrayarray"
+                                  ],
+                                  "x-enumDescriptions": {
+                                    "string": "Source value is a text string.",
+                                    "number": "Source value is numeric.",
+                                    "boolean": "Source value is true or false.",
+                                    "object": "Source value is a JSON object.",
+                                    "stringarray": "Source value is an array of strings.",
+                                    "numberarray": "Source value is an array of numbers.",
+                                    "booleanarray": "Source value is an array of booleans.",
+                                    "objectarray": "Source value is an array of objects.",
+                                    "arrayarray": "Source value is an array of arrays."
+                                  },
+                                  "examples": [
+                                    "string",
+                                    "number",
+                                    "boolean",
+                                    "object"
+                                  ]
+                                },
+                                "mappings": {
+                                  "type": "array",
+                                  "description": "**Purpose**\nEnables recursive definition of nested object structures through child mapping objects.\n\n**Guidance**\nThis is the KEY FIELD that implements the recursive pattern at the core of this schema:\n\n**When to Use**\n- REQUIRED when dataType = \"object\" (unless you are copying an entire object from the input record)\n- REQUIRED in buildArrayHelper.mappings when defining complex object array elements\n- NEVER used with simple types (string, number, boolean, date)\n\n**Behavior**\n- Each mapping in this array becomes a property of the parent object\n- The full Mappings schema is repeated recursively at each level\n- Can be nested to any depth for complex hierarchical structures\n\n**Context Handling**\n- Each level of nesting changes the mapping CONTEXT for 'generate'\n- The extraction CONTEXT always remains the original input record\n- This means child mappings can pull data from anywhere in the input record\n\n**Common Patterns**\n\n**Nested Objects**\n```json\n{\n  \"generate\": \"customer\",\n  \"dataType\": \"object\",\n  \"mappings\": [\n    {\n      \"generate\": \"contact\",\n      \"dataType\": \"object\",\n      \"mappings\": [\n        {\"generate\": \"email\", \"dataType\": \"string\", \"extract\": \"$.customerEmail\"}\n      ]\n    }\n  ]\n}\n```\n\n**Multiple Fields in Object**\n```json\n{\n  \"generate\": \"address\",\n  \"dataType\": \"object\",\n  \"mappings\": [\n    {\"generate\": \"street\", \"dataType\": \"string\", \"extract\": \"$.address.line1\"},\n    {\"generate\": \"city\", \"dataType\": \"string\", \"extract\": \"$.address.city\"},\n    {\"generate\": \"country\", \"dataType\": \"string\", \"extract\": \"$.address.country\"}\n  ]\n}\n```\n\nIMPORTANT: When analyzing or generating mappings, ALWAYS check if parent.dataType = \"object\"\nor if you're inside buildArrayHelper.mappings for objectarray elements. These are the only\nvalid contexts for the mappings array.\n",
+                                  "items": {
+                                    "_circularRef": "#/Mappings/items"
+                                  },
+                                  "examples": [
+                                    [
+                                      {
+                                        "generate": "firstName",
+                                        "extract": "$.name.first",
+                                        "dataType": "string",
+                                        "status": "Active"
+                                      },
+                                      {
+                                        "generate": "lastName",
+                                        "extract": "$.name.last",
+                                        "dataType": "string",
+                                        "status": "Active"
+                                      }
+                                    ]
+                                  ]
+                                },
+                                "buildArrayHelper": {
+                                  "type": "array",
+                                  "x-celigo-ai-guidance": [
+                                    "Entry-level `extract` accepts an iterating array path\n(`$.items[*]`), `\"$\"` (the record root), or omission \u2014 a\nconstructed entry (child `mappings` with the extract omitted or\n`\"$\"`; the two spellings are equivalent) contributes exactly one\nelement, and entries append in order. On a grouped (array)\nrecord the record itself is the array to iterate: `\"$[*]\"`\nyields one `objectarray` element per row (children address the\nrow as `$.field`), and `\"$[*].field\"` yields one primitive-array\nvalue per row. Indexed or comma-joined\nentry extracts (`\"$[0]\"`, `\"$[0],$[0]\"`) are not valid: the\nprocessor renders the entire destination array as null with no\nvalidation error. To emit a fixed number of static elements, add\nthat many sibling constructed entries \u2014 never index the extract."
+                                  ],
+                                  "description": "**Purpose**\nConfigures how to construct arrays in the output record, handling various array types and inputs.\n\n**Guidance**\nThis is the REQUIRED mechanism for ALL array data types:\n\n**When to Use**\n- REQUIRED when dataType ends with \"array\" (stringarray, objectarray, etc.)\n- Each entry in this array contributes elements to the output array\n- Multiple entries allow combining data from different input arrays\n\n**Array Type Handling**\n\n**For Simple Arrays (stringarray, numberarray, booleanarray)**\n- Only the 'extract' field is used to pull values\n- JSON path with wildcards (e.g., $.items[*].name) returns multiple values;\n  on a grouped (array) record the record itself is the array, so the\n  path roots at it ($[*].name \u2014 one value per row)\n- Each result is converted to the appropriate primitive type\n```json\n{\n  \"generate\": \"productNames\",\n  \"dataType\": \"stringarray\",\n  \"buildArrayHelper\": [\n    {\"extract\": \"$.products[*].name\"}\n  ]\n}\n```\n\n**For Object Arrays (objectarray) - three patterns**\n\n1. Extract Only (existing objects):\n```json\n{\n  \"generate\": \"contacts\",\n  \"dataType\": \"objectarray\",\n  \"buildArrayHelper\": [\n    {\"extract\": \"$.account.primaryContacts[*]\"},  // Pull primary contact objects\n    {\"extract\": \"$.account.secondaryContacts[*]\"},  // Pull secondary contact objects\n    {\"extract\": \"$.vendor.contactPersons[*]\"},  // Pull vendor contact objects\n    {\"extract\": \"$.subsidiaries[*].mainContact\"}  // Pull main contact from each subsidiary\n  ]\n}\n```\n\n2. Mappings Only (constructed object):\n```json\n{\n  \"generate\": \"contactInfo\",\n  \"dataType\": \"objectarray\",\n  \"buildArrayHelper\": [\n    {\n      \"mappings\": [  // Creates one object in the array\n        {\"generate\": \"type\", \"dataType\": \"string\", \"extract\": \"primary\"},\n        {\"generate\": \"email\", \"dataType\": \"string\", \"extract\": \"$.primaryEmail\"}\n      ]\n    },\n    {\n      \"mappings\": [  // Creates another object in the array\n        {\"generate\": \"type\", \"dataType\": \"string\", \"extract\": \"secondary\"},\n        {\"generate\": \"email\", \"dataType\": \"string\", \"extract\": \"$.secondaryEmail\"}\n      ]\n    }\n  ]\n}\n```\nEach constructed entry contributes exactly one element, in entry\norder; writing the entry with `\"extract\": \"$\"` is equivalent to\nomitting the extract (both anchor the element at the record root).\nA fixed number of static elements is built from that many sibling\nconstructed entries.\n\n3. Extract AND Mappings (transform input arrays):\n```json\n{\n  \"generate\": \"lineItems\",\n  \"dataType\": \"objectarray\",\n  \"buildArrayHelper\": [\n    {\n      \"extract\": \"$.order.items[*]\",  // For each item in the array\n      \"mappings\": [  // Transform to this structure using the composite object\n        {\"generate\": \"sku\", \"dataType\": \"string\", \"extract\": \"$.order.items.productId\"},  // Notice: items is singular\n        {\"generate\": \"quantity\", \"dataType\": \"number\", \"extract\": \"$.order.items.qty\"},   // Notice: items is singular\n        {\"generate\": \"orderNumber\", \"dataType\": \"string\", \"extract\": \"$.order.id\"},       // Access parent data\n        {\"generate\": \"customerName\", \"dataType\": \"string\", \"extract\": \"$.customerName\"}   // Access root data\n      ]\n    }\n  ]\n}\n```\n\n**For Arrays of Arrays (arrayarray)**\n- Similar to objectarray, but inner arrays have empty 'generate' fields\n- Used for matrix/table structures\n```json\n{\n  \"generate\": \"matrix\",\n  \"dataType\": \"arrayarray\",\n  \"buildArrayHelper\": [\n    {\n      \"extract\": \"$.rows[*]\",  // For each row in the rows array\n      \"mappings\": [\n        {\n          \"dataType\": \"numberarray\",  // Note: No generate field for inner arrays\n          \"buildArrayHelper\": [\n            {\"extract\": \"$.rows.columns[*]\"}  // Notice: \"rows\" is singular in the composite object\n          ]\n        }\n      ]\n    }\n  ]\n}\n```\n\n**Important details**\n\n- When both extract and mappings are provided, the system creates special composite objects\n  that maintain hierarchical context during processing\n- This enables accessing both the current array element AND its parent context\n- An ITERATING entry's extract MUST be a JSON path that iterates an array:\n  '$.items[*]' when the array is a field of an object record, or '$[*]'\n  (objectarray) / '$[*].field' (primitive arrays) when the record itself is a\n  grouped array of rows. A CONSTRUCTED entry (child mappings building one\n  element) instead omits extract or sets it to exactly \"$\" \u2014 never rewrite \"$\"\n  into an indexed or comma-joined form ('$[0]', '$[0],$[0]'): those render the\n  entire destination array as null without raising a validation error\n- Each array helper entry acts independently, potentially adding multiple elements\n\nThe buildArrayHelper is the most complex part of the mappings system - always analyze the\ndataType first to understand which pattern is appropriate.\n",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "extract": {
+                                        "type": "string",
+                                        "description": "JSON path expression that identifies the input array or values to extract.\n\nFor objectarray with mappings, this defines which input objects to iterate through.\nThe JSON path must return either a single object or an array of objects.\n\nFor a CONSTRUCTED entry (child mappings building exactly one element from\nrecord-root fields and constants), omit this field or set it to exactly \"$\" \u2014\nthe two spellings are equivalent. Indexed or comma-joined forms ('$[0]',\n'$[0],$[0]') are not valid at the entry level: the processor renders the\nentire destination array as null without raising a validation error.\n\nThe system creates special composite objects during processing to maintain\nhierarchical relationships, allowing easy access to both the current array item\nand its parent contexts.\n",
+                                        "examples": [
+                                          "$.items[*]",
+                                          "$.order.lineItems[*]",
+                                          "$.parents[*].children[*]",
+                                          "$"
+                                        ]
+                                      },
+                                      "sourceDataType": {
+                                        "type": "string",
+                                        "description": "Declares the JSON type of the input array being iterated, to ensure\nproper type handling during array construction. Same enum as `dataType`.\n",
+                                        "enum": [
+                                          "string",
+                                          "number",
+                                          "boolean",
+                                          "object",
+                                          "stringarray",
+                                          "numberarray",
+                                          "booleanarray",
+                                          "objectarray",
+                                          "arrayarray"
+                                        ],
+                                        "x-enumDescriptions": {
+                                          "string": "Input array contains string elements.",
+                                          "number": "Input array contains numeric elements.",
+                                          "boolean": "Input array contains boolean elements.",
+                                          "object": "Input array contains object elements.",
+                                          "stringarray": "Input array contains arrays of strings.",
+                                          "numberarray": "Input array contains arrays of numbers.",
+                                          "booleanarray": "Input array contains arrays of booleans.",
+                                          "objectarray": "Input array contains arrays of objects.",
+                                          "arrayarray": "Input array contains arrays of arrays."
+                                        },
+                                        "examples": [
+                                          "string",
+                                          "number",
+                                          "boolean",
+                                          "object"
+                                        ]
+                                      },
+                                      "default": {
+                                        "type": ["string", "null"],
+                                        "description": "Specifies a fallback value when the extracted array element is empty or\nnot found in the input data.\n\nExplicit JSON `null` is itself a valid fallback (the element is written as\nJSON null); omitting the key means no fallback is applied.\n",
+                                        "examples": ["N/A", "0", "false"]
+                                      },
+                                      "conditional": {
+                                        "type": "object",
+                                        "description": "Defines conditional rules for including each array element in the result.\n",
+                                        "properties": {
+                                          "when": {
+                                            "type": "string",
+                                            "description": "Specifies the condition that must be met for an array element to be included.\n\n'extract_not_empty' only includes elements where the extract field returns a value.\n",
+                                            "enum": ["extract_not_empty"],
+                                            "x-enumDescriptions": {
+                                              "extract_not_empty": "Include the array element only when the extract field returns a non-empty value."
+                                            },
+                                            "examples": ["extract_not_empty"]
+                                          }
+                                        }
+                                      },
+                                      "mappings": {
+                                        "type": "array",
+                                        "description": "Contains recursive mapping definitions for complex array element transformations.\n\n**Composite object mechanism**\n\nWhen both 'extract' and 'mappings' are used together, the system implements a sophisticated\n\"composite object\" approach that is crucial for AI agents to understand:\n\n1. The system starts with the complete input record\n\n2. For each array element matched by the extract path, it creates a modified version of\n   the input record where:\n   - Array paths in the extract JSON path are REPLACED with single objects\n   - Each array ([]) in the path is converted to a single object ({})\n   - This preserves the hierarchical relationship between nested arrays\n\n**Example**\n\nGiven an input record:\n```json\n{\n  \"customer\": {\n    \"name\": \"John Doe\",\n    \"orders\": [\n      {\n        \"id\": \"O-001\",\n        \"items\": [\n          {\"sku\": \"ABC\", \"qty\": 2},\n          {\"sku\": \"XYZ\", \"qty\": 1}\n        ]\n      },\n      {\n        \"id\": \"O-002\",\n        \"items\": [\n          {\"sku\": \"DEF\", \"qty\": 3}\n        ]\n      }\n    ]\n  }\n}\n```\n\nWith extract path: `$.customer.orders[*].items[*]`\n\nFor each item, the system creates a composite object like:\n```json\n{\n  \"customer\": {\n    \"name\": \"John Doe\",\n    \"orders\": {  // Note: Array replaced with single object\n      \"id\": \"O-001\",\n      \"items\": {  // Note: Array replaced with single object\n        \"sku\": \"ABC\",\n        \"qty\": 2\n      }\n    }\n  }\n}\n```\n\nThen in your mappings, you can access:\n- The current item: `$.customer.orders.items.sku`\n- The parent order: `$.customer.orders.id`\n- Top-level data: `$.customer.name`\n\nThis approach allows for precise mapping from deeply nested structures while maintaining\naccess to all contextual parent data, without requiring complex array index management.\n\n**Implementation guidance**\n\nWhen implementing the composite object mechanism:\n\n1. Analyze the extract path to identify all array patterns (`[*]` or `[number]`)\n2. For each array in the path, understand that it will be replaced with a single object\n3. In the mappings, use paths that reference these arrays as if they were objects\n4. Remember that every mapping still has access to the full input record context\n5. This mechanism is especially powerful when mapping hierarchical data like:\n   - Order \u2192 Line Items \u2192 Taxes/Discounts\n   - Customer \u2192 Addresses \u2192 Address Lines\n   - Invoice \u2192 Line Items \u2192 Serial Numbers\n\nThe extract path effectively tells the system \"iterate through these arrays\",\nwhile the composite object mechanism ensures you can still access both the\ncurrent array item AND its parent context during mapping.\n",
+                                        "items": {
+                                          "_circularRef": "#/Mappings/items"
+                                        },
+                                        "examples": [
+                                          [
+                                            {
+                                              "generate": "itemName",
+                                              "extract": "$.name",
+                                              "dataType": "string",
+                                              "status": "Active"
+                                            },
+                                            {
+                                              "generate": "itemPrice",
+                                              "extract": "$.price",
+                                              "dataType": "number",
+                                              "status": "Active"
+                                            }
+                                          ]
+                                        ]
+                                      }
+                                    }
+                                  }
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "description": "**Purpose**\nRequired on every mapping entry. Controls whether the mapping is applied.\n\n**Guidance**\nEmit `\"Active\"` for mappings that should run; `\"Draft\"` saves an\nin-progress mapping without the Active-only field validations. The\nAPI rejects a mapping missing this field\n(validation error: \"Mapping object must have status field present.\").\n",
+                                  "x-celigo-ai-guidance": [
+                                    "Emit `\"Active\"` for mappings that should run; `\"Draft\"` is also\naccepted and saves the mapping while bypassing the Active-only\nfield validations. The value is case-sensitive. The API rejects:\n- Missing field: `[status_field_absent] Mapping object must have status field present.`\n- Wrong case (e.g. `\"active\"`): `[invalid_status_enums] active is not a valid enum for status field.`"
+                                  ],
+                                  "enum": ["Active", "Draft"],
+                                  "x-enumDescriptions": {
+                                    "Active": "The mapping is enabled and applied during processing.",
+                                    "Draft": "In-progress mapping; saved without the Active-only field validations."
+                                  },
+                                  "examples": ["Active"]
+                                },
+                                "conditional": {
+                                  "type": "object",
+                                  "description": "**Purpose**\nDefines conditional processing rules for the entire mapping.\n\n**Guidance**\nThese conditions determine whether the mapping is applied based on record\nstate or field content:\n\n**When to Use**\n- When a mapping should only be applied in specific circumstances\n- To implement conditional logic without using complex handlebars expressions\n- For creating mappings that only run during create or update operations\n\n**Available Conditions**\n\n- `record_created`: Apply only when creating a new record\n  Useful for setting initial values that should not be overwritten during updates\n\n- `record_updated`: Apply only when updating an existing record\n  Useful for transformation logic that should only run during updates\n\n- `extract_not_empty`: Apply only when the extract field returns a value\n  Useful for conditional mapping based on input data availability\n\n**Example**\n```json\n{\n  \"generate\": \"statusMessage\",\n  \"dataType\": \"string\",\n  \"status\": \"Active\",\n  \"extract\": \"$.status.message\",\n  \"conditional\": {\n    \"when\": \"extract_not_empty\"  // Only map when status.message exists\n  }\n}\n```\n",
+                                  "properties": {
+                                    "when": {
+                                      "type": "string",
+                                      "description": "Specifies the condition that triggers application of this mapping:\n- record_created: Apply only when creating a new record\n- record_updated: Apply only when updating an existing record\n- extract_not_empty: Apply only when the extract field returns a value\n",
+                                      "enum": [
+                                        "record_created",
+                                        "record_updated",
+                                        "extract_not_empty"
+                                      ],
+                                      "x-enumDescriptions": {
+                                        "record_created": "Apply this mapping only when creating a new record.",
+                                        "record_updated": "Apply this mapping only when updating an existing record.",
+                                        "extract_not_empty": "Apply this mapping only when the extract field returns a non-empty value."
+                                      },
+                                      "examples": [
+                                        "record_created",
+                                        "record_updated",
+                                        "extract_not_empty"
+                                      ]
+                                    }
+                                  }
+                                }
+                              },
+                              "required": ["dataType"]
+                            },
+                            "examples": [
+                              [
+                                {
+                                  "generate": "firstName",
+                                  "extract": "$.name.first",
+                                  "dataType": "string",
+                                  "status": "Active"
+                                },
+                                {
+                                  "generate": "lastName",
+                                  "extract": "$.name.last",
+                                  "dataType": "string",
+                                  "status": "Active"
+                                }
+                              ]
+                            ]
+                          },
+                          "buildArrayHelper": {
+                            "type": "array",
+                            "x-celigo-ai-guidance": [
+                              "Entry-level `extract` accepts an iterating array path\n(`$.items[*]`), `\"$\"` (the record root), or omission \u2014 a\nconstructed entry (child `mappings` with the extract omitted or\n`\"$\"`; the two spellings are equivalent) contributes exactly one\nelement, and entries append in order. On a grouped (array)\nrecord the record itself is the array to iterate: `\"$[*]\"`\nyields one `objectarray` element per row (children address the\nrow as `$.field`), and `\"$[*].field\"` yields one primitive-array\nvalue per row. Indexed or comma-joined\nentry extracts (`\"$[0]\"`, `\"$[0],$[0]\"`) are not valid: the\nprocessor renders the entire destination array as null with no\nvalidation error. To emit a fixed number of static elements, add\nthat many sibling constructed entries \u2014 never index the extract."
+                            ],
+                            "description": "**Purpose**\nConfigures how to construct arrays in the output record, handling various array types and inputs.\n\n**Guidance**\nThis is the REQUIRED mechanism for ALL array data types:\n\n**When to Use**\n- REQUIRED when dataType ends with \"array\" (stringarray, objectarray, etc.)\n- Each entry in this array contributes elements to the output array\n- Multiple entries allow combining data from different input arrays\n\n**Array Type Handling**\n\n**For Simple Arrays (stringarray, numberarray, booleanarray)**\n- Only the 'extract' field is used to pull values\n- JSON path with wildcards (e.g., $.items[*].name) returns multiple values;\n  on a grouped (array) record the record itself is the array, so the\n  path roots at it ($[*].name \u2014 one value per row)\n- Each result is converted to the appropriate primitive type\n```json\n{\n  \"generate\": \"productNames\",\n  \"dataType\": \"stringarray\",\n  \"buildArrayHelper\": [\n    {\"extract\": \"$.products[*].name\"}\n  ]\n}\n```\n\n**For Object Arrays (objectarray) - three patterns**\n\n1. Extract Only (existing objects):\n```json\n{\n  \"generate\": \"contacts\",\n  \"dataType\": \"objectarray\",\n  \"buildArrayHelper\": [\n    {\"extract\": \"$.account.primaryContacts[*]\"},  // Pull primary contact objects\n    {\"extract\": \"$.account.secondaryContacts[*]\"},  // Pull secondary contact objects\n    {\"extract\": \"$.vendor.contactPersons[*]\"},  // Pull vendor contact objects\n    {\"extract\": \"$.subsidiaries[*].mainContact\"}  // Pull main contact from each subsidiary\n  ]\n}\n```\n\n2. Mappings Only (constructed object):\n```json\n{\n  \"generate\": \"contactInfo\",\n  \"dataType\": \"objectarray\",\n  \"buildArrayHelper\": [\n    {\n      \"mappings\": [  // Creates one object in the array\n        {\"generate\": \"type\", \"dataType\": \"string\", \"extract\": \"primary\"},\n        {\"generate\": \"email\", \"dataType\": \"string\", \"extract\": \"$.primaryEmail\"}\n      ]\n    },\n    {\n      \"mappings\": [  // Creates another object in the array\n        {\"generate\": \"type\", \"dataType\": \"string\", \"extract\": \"secondary\"},\n        {\"generate\": \"email\", \"dataType\": \"string\", \"extract\": \"$.secondaryEmail\"}\n      ]\n    }\n  ]\n}\n```\nEach constructed entry contributes exactly one element, in entry\norder; writing the entry with `\"extract\": \"$\"` is equivalent to\nomitting the extract (both anchor the element at the record root).\nA fixed number of static elements is built from that many sibling\nconstructed entries.\n\n3. Extract AND Mappings (transform input arrays):\n```json\n{\n  \"generate\": \"lineItems\",\n  \"dataType\": \"objectarray\",\n  \"buildArrayHelper\": [\n    {\n      \"extract\": \"$.order.items[*]\",  // For each item in the array\n      \"mappings\": [  // Transform to this structure using the composite object\n        {\"generate\": \"sku\", \"dataType\": \"string\", \"extract\": \"$.order.items.productId\"},  // Notice: items is singular\n        {\"generate\": \"quantity\", \"dataType\": \"number\", \"extract\": \"$.order.items.qty\"},   // Notice: items is singular\n        {\"generate\": \"orderNumber\", \"dataType\": \"string\", \"extract\": \"$.order.id\"},       // Access parent data\n        {\"generate\": \"customerName\", \"dataType\": \"string\", \"extract\": \"$.customerName\"}   // Access root data\n      ]\n    }\n  ]\n}\n```\n\n**For Arrays of Arrays (arrayarray)**\n- Similar to objectarray, but inner arrays have empty 'generate' fields\n- Used for matrix/table structures\n```json\n{\n  \"generate\": \"matrix\",\n  \"dataType\": \"arrayarray\",\n  \"buildArrayHelper\": [\n    {\n      \"extract\": \"$.rows[*]\",  // For each row in the rows array\n      \"mappings\": [\n        {\n          \"dataType\": \"numberarray\",  // Note: No generate field for inner arrays\n          \"buildArrayHelper\": [\n            {\"extract\": \"$.rows.columns[*]\"}  // Notice: \"rows\" is singular in the composite object\n          ]\n        }\n      ]\n    }\n  ]\n}\n```\n\n**Important details**\n\n- When both extract and mappings are provided, the system creates special composite objects\n  that maintain hierarchical context during processing\n- This enables accessing both the current array element AND its parent context\n- An ITERATING entry's extract MUST be a JSON path that iterates an array:\n  '$.items[*]' when the array is a field of an object record, or '$[*]'\n  (objectarray) / '$[*].field' (primitive arrays) when the record itself is a\n  grouped array of rows. A CONSTRUCTED entry (child mappings building one\n  element) instead omits extract or sets it to exactly \"$\" \u2014 never rewrite \"$\"\n  into an indexed or comma-joined form ('$[0]', '$[0],$[0]'): those render the\n  entire destination array as null without raising a validation error\n- Each array helper entry acts independently, potentially adding multiple elements\n\nThe buildArrayHelper is the most complex part of the mappings system - always analyze the\ndataType first to understand which pattern is appropriate.\n",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "extract": {
+                                  "type": "string",
+                                  "description": "JSON path expression that identifies the input array or values to extract.\n\nFor objectarray with mappings, this defines which input objects to iterate through.\nThe JSON path must return either a single object or an array of objects.\n\nFor a CONSTRUCTED entry (child mappings building exactly one element from\nrecord-root fields and constants), omit this field or set it to exactly \"$\" \u2014\nthe two spellings are equivalent. Indexed or comma-joined forms ('$[0]',\n'$[0],$[0]') are not valid at the entry level: the processor renders the\nentire destination array as null without raising a validation error.\n\nThe system creates special composite objects during processing to maintain\nhierarchical relationships, allowing easy access to both the current array item\nand its parent contexts.\n",
+                                  "examples": [
+                                    "$.items[*]",
+                                    "$.order.lineItems[*]",
+                                    "$.parents[*].children[*]",
+                                    "$"
+                                  ]
+                                },
+                                "sourceDataType": {
+                                  "type": "string",
+                                  "description": "Declares the JSON type of the input array being iterated, to ensure\nproper type handling during array construction. Same enum as `dataType`.\n",
+                                  "enum": [
+                                    "string",
+                                    "number",
+                                    "boolean",
+                                    "object",
+                                    "stringarray",
+                                    "numberarray",
+                                    "booleanarray",
+                                    "objectarray",
+                                    "arrayarray"
+                                  ],
+                                  "x-enumDescriptions": {
+                                    "string": "Input array contains string elements.",
+                                    "number": "Input array contains numeric elements.",
+                                    "boolean": "Input array contains boolean elements.",
+                                    "object": "Input array contains object elements.",
+                                    "stringarray": "Input array contains arrays of strings.",
+                                    "numberarray": "Input array contains arrays of numbers.",
+                                    "booleanarray": "Input array contains arrays of booleans.",
+                                    "objectarray": "Input array contains arrays of objects.",
+                                    "arrayarray": "Input array contains arrays of arrays."
+                                  },
+                                  "examples": [
+                                    "string",
+                                    "number",
+                                    "boolean",
+                                    "object"
+                                  ]
+                                },
+                                "default": {
+                                  "type": ["string", "null"],
+                                  "description": "Specifies a fallback value when the extracted array element is empty or\nnot found in the input data.\n\nExplicit JSON `null` is itself a valid fallback (the element is written as\nJSON null); omitting the key means no fallback is applied.\n",
+                                  "examples": ["N/A", "0", "false"]
+                                },
+                                "conditional": {
+                                  "type": "object",
+                                  "description": "Defines conditional rules for including each array element in the result.\n",
+                                  "properties": {
+                                    "when": {
+                                      "type": "string",
+                                      "description": "Specifies the condition that must be met for an array element to be included.\n\n'extract_not_empty' only includes elements where the extract field returns a value.\n",
+                                      "enum": ["extract_not_empty"],
+                                      "x-enumDescriptions": {
+                                        "extract_not_empty": "Include the array element only when the extract field returns a non-empty value."
+                                      },
+                                      "examples": ["extract_not_empty"]
+                                    }
+                                  }
+                                },
+                                "mappings": {
+                                  "type": "array",
+                                  "description": "Contains recursive mapping definitions for complex array element transformations.\n\n**Composite object mechanism**\n\nWhen both 'extract' and 'mappings' are used together, the system implements a sophisticated\n\"composite object\" approach that is crucial for AI agents to understand:\n\n1. The system starts with the complete input record\n\n2. For each array element matched by the extract path, it creates a modified version of\n   the input record where:\n   - Array paths in the extract JSON path are REPLACED with single objects\n   - Each array ([]) in the path is converted to a single object ({})\n   - This preserves the hierarchical relationship between nested arrays\n\n**Example**\n\nGiven an input record:\n```json\n{\n  \"customer\": {\n    \"name\": \"John Doe\",\n    \"orders\": [\n      {\n        \"id\": \"O-001\",\n        \"items\": [\n          {\"sku\": \"ABC\", \"qty\": 2},\n          {\"sku\": \"XYZ\", \"qty\": 1}\n        ]\n      },\n      {\n        \"id\": \"O-002\",\n        \"items\": [\n          {\"sku\": \"DEF\", \"qty\": 3}\n        ]\n      }\n    ]\n  }\n}\n```\n\nWith extract path: `$.customer.orders[*].items[*]`\n\nFor each item, the system creates a composite object like:\n```json\n{\n  \"customer\": {\n    \"name\": \"John Doe\",\n    \"orders\": {  // Note: Array replaced with single object\n      \"id\": \"O-001\",\n      \"items\": {  // Note: Array replaced with single object\n        \"sku\": \"ABC\",\n        \"qty\": 2\n      }\n    }\n  }\n}\n```\n\nThen in your mappings, you can access:\n- The current item: `$.customer.orders.items.sku`\n- The parent order: `$.customer.orders.id`\n- Top-level data: `$.customer.name`\n\nThis approach allows for precise mapping from deeply nested structures while maintaining\naccess to all contextual parent data, without requiring complex array index management.\n\n**Implementation guidance**\n\nWhen implementing the composite object mechanism:\n\n1. Analyze the extract path to identify all array patterns (`[*]` or `[number]`)\n2. For each array in the path, understand that it will be replaced with a single object\n3. In the mappings, use paths that reference these arrays as if they were objects\n4. Remember that every mapping still has access to the full input record context\n5. This mechanism is especially powerful when mapping hierarchical data like:\n   - Order \u2192 Line Items \u2192 Taxes/Discounts\n   - Customer \u2192 Addresses \u2192 Address Lines\n   - Invoice \u2192 Line Items \u2192 Serial Numbers\n\nThe extract path effectively tells the system \"iterate through these arrays\",\nwhile the composite object mechanism ensures you can still access both the\ncurrent array item AND its parent context during mapping.\n",
+                                  "items": {
+                                    "_circularRef": "#/Mappings/items"
+                                  },
+                                  "examples": [
+                                    [
+                                      {
+                                        "generate": "itemName",
+                                        "extract": "$.name",
+                                        "dataType": "string",
+                                        "status": "Active"
+                                      },
+                                      {
+                                        "generate": "itemPrice",
+                                        "extract": "$.price",
+                                        "dataType": "number",
+                                        "status": "Active"
+                                      }
+                                    ]
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "status": {
+                            "type": "string",
+                            "description": "**Purpose**\nRequired on every mapping entry. Controls whether the mapping is applied.\n\n**Guidance**\nEmit `\"Active\"` for mappings that should run; `\"Draft\"` saves an\nin-progress mapping without the Active-only field validations. The\nAPI rejects a mapping missing this field\n(validation error: \"Mapping object must have status field present.\").\n",
+                            "x-celigo-ai-guidance": [
+                              "Emit `\"Active\"` for mappings that should run; `\"Draft\"` is also\naccepted and saves the mapping while bypassing the Active-only\nfield validations. The value is case-sensitive. The API rejects:\n- Missing field: `[status_field_absent] Mapping object must have status field present.`\n- Wrong case (e.g. `\"active\"`): `[invalid_status_enums] active is not a valid enum for status field.`"
+                            ],
+                            "enum": ["Active", "Draft"],
+                            "x-enumDescriptions": {
+                              "Active": "The mapping is enabled and applied during processing.",
+                              "Draft": "In-progress mapping; saved without the Active-only field validations."
+                            },
+                            "examples": ["Active"]
+                          },
+                          "conditional": {
+                            "type": "object",
+                            "description": "**Purpose**\nDefines conditional processing rules for the entire mapping.\n\n**Guidance**\nThese conditions determine whether the mapping is applied based on record\nstate or field content:\n\n**When to Use**\n- When a mapping should only be applied in specific circumstances\n- To implement conditional logic without using complex handlebars expressions\n- For creating mappings that only run during create or update operations\n\n**Available Conditions**\n\n- `record_created`: Apply only when creating a new record\n  Useful for setting initial values that should not be overwritten during updates\n\n- `record_updated`: Apply only when updating an existing record\n  Useful for transformation logic that should only run during updates\n\n- `extract_not_empty`: Apply only when the extract field returns a value\n  Useful for conditional mapping based on input data availability\n\n**Example**\n```json\n{\n  \"generate\": \"statusMessage\",\n  \"dataType\": \"string\",\n  \"status\": \"Active\",\n  \"extract\": \"$.status.message\",\n  \"conditional\": {\n    \"when\": \"extract_not_empty\"  // Only map when status.message exists\n  }\n}\n```\n",
+                            "properties": {
+                              "when": {
+                                "type": "string",
+                                "description": "Specifies the condition that triggers application of this mapping:\n- record_created: Apply only when creating a new record\n- record_updated: Apply only when updating an existing record\n- extract_not_empty: Apply only when the extract field returns a value\n",
+                                "enum": [
+                                  "record_created",
+                                  "record_updated",
+                                  "extract_not_empty"
+                                ],
+                                "x-enumDescriptions": {
+                                  "record_created": "Apply this mapping only when creating a new record.",
+                                  "record_updated": "Apply this mapping only when updating an existing record.",
+                                  "extract_not_empty": "Apply this mapping only when the extract field returns a non-empty value."
+                                },
+                                "examples": [
+                                  "record_created",
+                                  "record_updated",
+                                  "extract_not_empty"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "required": ["dataType"]
+                      }
+                    },
+                    "lookups": {},
+                    "inputContext": {
+                      "type": "string",
+                      "enum": ["record", "envelope"],
+                      "x-enumDescriptions": {
+                        "record": "The transform processor evaluates `mappings[].extract` JSONPath against the flat record itself (`$.field`, no `record.` segment) \u2014 the default when absent.",
+                        "envelope": "The transform processor evaluates JSONPath against the wrapped runtime envelope `{record, settings, job, \u2026}` (file-provider steps also carry `fileMeta`) \u2014 extracts must include the `record.` segment (`$.record.field`)."
+                      },
+                      "description": "Controls the JSON shape the transformTwoDotZero processor\nevaluates `mappings[].extract` JSONPath values against at\nflow runtime. Applies only to Transform 2.0 (v2,\n`rulesTwoDotZero`); v1 transforms (the `rules` array on\n`transform.expression.rules`) and script-mode transforms\nignore this field.\n",
+                      "x-celigo-ai-guidance": [
+                        "## Extract anchoring by mode\n\n- `record` (default \u2014 absent / empty / undefined): the\n  processor sees the FLAT record as its evaluation root.\n  `mappings[].extract` JSONPath MUST anchor directly at\n  `$` with NO `record.` segment \u2014 e.g. `\"$.orderId\"`,\n  `\"$.customer.email\"`; PLACEHOLDER extracts use\n  `\"$.PLACEHOLDER_<field>\"`.\n  This is the dominant Celigo idiom and the right choice for new transforms.\n- `envelope`: the processor sees a wrapped object\n  `{record: {...}, settings: ..., job: ...}` (plus\n  `fileMeta` on file-provider steps).\n  `mappings[].extract` JSONPath MUST include the\n  `record.` segment \u2014 e.g. `\"$.record.orderId\"`;\n  PLACEHOLDER extracts use `\"$.record.PLACEHOLDER_<field>\"`.\n  Pick this only when the transform was authored against\n  the envelope shape on purpose.",
+                        "Handlebars expressions inside `extract`\n(`{{record.field}}`, `{{dateFormat ... record.field}}`)\nALWAYS reference the `record` root regardless of\n`inputContext` \u2014 only JSONPath anchoring flips.",
+                        "Emit `inputContext` explicitly on new v2 transforms:\nunset is read as `record`, but stating it makes the\nextract-anchoring contract self-documenting and immune\nto a platform default change.",
+                        "## Allowed values\n\n- ``record`` (default \u2014 emitted when the field is absent\n  / empty / undefined): the transform processor sees\n  the FLAT record itself as its evaluation root.\n  ``mappings[].extract`` JSONPath values MUST anchor\n  directly at ``$`` with NO ``record.`` segment \u2014 for\n  example ``\"$.orderId\"`` or\n  ``\"$.customer.email\"``.  PLACEHOLDER extracts use\n  ``\"$.PLACEHOLDER_<field>\"``.  This is the dominant\n  Celigo idiom and the right choice for new transforms.\n\n- ``envelope``: the transform processor sees a wrapped\n  object of the shape\n  ``{record: {...}, settings: ..., job: ...}`` (plus\n  ``fileMeta`` on file-provider steps) \u2014 the\n  same runtime-context envelope Handlebars / SQL /\n  GraphQL specialists consume.  ``mappings[].extract``\n  JSONPath values MUST include the ``record.`` segment\n  \u2014 for example ``\"$.record.orderId\"`` or\n  ``\"$.record.customer.email\"``.  PLACEHOLDER extracts\n  use ``\"$.record.PLACEHOLDER_<field>\"``.  Pick this\n  mode only when the export was authored against the\n  envelope shape on purpose (typically because an\n  upstream step intentionally feeds the wrapped\n  runtime context through to the transform).\n\n## Handlebars expressions are NOT affected\n\nHandlebars expressions inside ``extract``\n(``{{record.field}}``,\n``{{dateFormat ... record.field}}``, etc.) ALWAYS\nreference the runtime context's ``record`` root\nregardless of ``inputContext`` \u2014 the Handlebars runtime\nalways sees the wrapped envelope.  Only JSONPath\nbehavior flips with this field.\n\n## Agent guidance\n\nSet this field explicitly on every new v2 transform\nthe agent authors.  Leaving it unset is interpreted as\n``record`` by the platform, but emitting\n``inputContext: record`` makes the contract\nself-documenting and prevents the transform from\ndrifting into envelope mode if an upstream change ever\nchanges the platform default.  The TransformsAgent\nreads this value off the transform config and threads\nit into the generator's prompt so the JSONPath form\nmatches the runtime root.",
+                        "## fileMeta on file-provider steps\n\nFile-provider exports and lookups populate a\n``fileMeta`` envelope key describing each record's\nsource file: ``fileName``, ``fileSize``, and\n``lastModifiedTime`` (epoch milliseconds).  Reach it\nas ``$.fileMeta.<field>`` in envelope mode, or as\n``{{fileMeta.<field>}}`` from a Handlebars extract in\neither mode.  The keys are exactly these three \u2014\nlowercase variants such as ``filesize`` or\n``filename`` resolve empty.  The standalone transform\nprocessor substitutes sample fileMeta values when the\nposted data lacks them, so a resolving editor render\nis not proof the step provides fileMeta \u2014 only\nfile-provider steps populate it at flow runtime."
+                      ],
+                      "examples": ["record", "envelope"]
+                    }
+                  }
+                }
+              }
+            },
+            "script": {
+              "type": "object",
+              "description": "Configuration for programmable script-based transformations. This object enables complex, custom\ntransformation logic beyond what expression-based transformations can provide.\n\n**Usage context**\n\nThis object is REQUIRED when `transform.type` is set to \"script\" and should not be configured\notherwise. It provides a way to execute custom JavaScript code to transform data according to\nspecialized business rules or complex algorithms.\n\n**Implementation approach**\n\nScript-based transformation works by:\n1. Executing the specified function from the referenced script\n2. Passing input data to the function\n3. Using the function's return value as the transformed output\n\n**Common use cases**\n\nScript transformation is ideal for:\n- Complex business logic that can't be expressed through mappings\n- Algorithmic transformations requiring computation\n- Dynamic transformations based on external factors\n- Legacy system data format compatibility\n- Multi-stage processing with intermediate steps\n\nOnly use script-based transformation when expression-based transformation is insufficient.\nScript transformation requires maintaining custom code, which adds complexity to the integration.\n",
+              "properties": {
+                "_scriptId": {
+                  "type": "string",
+                  "description": "Reference to a predefined script resource containing the transformation logic.\n\nThe referenced script should contain the function specified in the\n'function' property.\n",
+                  "format": "objectid",
+                  "x-celigo-refModel": "scripts",
+                  "examples": [
+                    "60a2c4e6f321d800129a1a3c",
+                    "5f8d43a1b9e5a80011a35f2c"
+                  ]
+                },
+                "function": {
+                  "type": "string",
+                  "description": "Name of the function within the script to execute for transformation. This function\nmust exist in the script referenced by _scriptId.\n",
+                  "examples": ["transformData", "convertRecord", "applyMapping"]
+                }
+              }
+            }
+          }
+        },
+        "traceKeyTemplate": {
+          "type": "string",
+          "maxLength": 1024,
+          "x-celigo-agent": ["handlebars"],
+          "x-celigo-handlebars-context": "record",
+          "x-celigo-canon": {
+            "decision": "verified-exact",
+            "reason": "The length cap is the server's own \u2014 a template one character over it fails the save with size_limit_exceeded naming input.traceKeyTemplate, while one exactly at the cap saves.",
+            "method": "live-probe",
+            "verified": "2026-09-21"
+          },
+          "description": "Handlebars template evaluated against the invocation input (`record`) to produce\nthe `traceKey` stored on each run-history entry, so an invocation can be found again\nwith the `traceKeyPrefix` filter on `GET /v1/tools/{_id}/invocations`. Omit it and\nentries carry an empty `traceKey`.",
+          "examples": [
+            "order-{{record.orderId}}",
+            "{{record.customerId}}-{{record.requestId}}"
+          ],
+          "x-celigo-ai-guidance": [
+            "The template must contain at least one `{{\u2026}}` expression and must compile: a\nliteral such as `order-static` fails the save with 422 on `input.traceKeyTemplate`\n(\"requires at least one double stash expression\"), and an unbalanced `{{record.id`\nfails with 422 \"Failed to compile handlebars template\". An empty string clears the\nfield."
+          ]
+        },
+        "debugUntil": {
+          "type": "string",
+          "format": "date-time",
+          "deprecated": true,
+          "description": "Step debug-capture expiry for the input stage. Not yet accepted on this route:\nthe value is dropped on PUT and `PATCH /input/debugUntil` is rejected as a\nnon-whitelisted path.",
+          "examples": ["2026-08-25T12:30:00.000Z"]
+        },
+        "mockInput": {
+          "type": "object",
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "User-payload sample data \u2014 interiors are freeform by design.",
+            "method": "documented-contract",
+            "verified": "2026-07-03"
+          },
+          "description": "Mock data for testing the tool's input processing.\n\nProvides sample input to test transformation logic and routing\nwithout requiring live data. Maximum size: 1MB.\n",
+          "additionalProperties": true
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "description": "Configuration for the tool's output processing.\n\nDefines how the tool's results are mapped, transformed, and enriched\nbefore being returned. Supports field mappings, lookups for data\nenrichment, and custom script hooks for pre/post-mapping processing.\n",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Display name for the output configuration.\n",
+          "examples": ["Transformed Customer", "Order Response"]
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 10240,
+          "description": "Description of the output data and its purpose.\n",
+          "examples": [
+            "Mapped and enriched customer record ready for the destination system"
+          ]
+        },
+        "schema": {
+          "type": "object",
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "User-authored JSON Schema payload \u2014 interiors are freeform by design; do not model keys.",
+            "method": "documented-contract",
+            "verified": "2026-07-03"
+          },
+          "description": "JSON Schema describing the output data structure.\n\nUsed for documentation and validation of the tool's output.\nMust be a valid JSON Schema document.\n",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "schemaMode": {
+          "type": "string",
+          "enum": ["manual", "json"],
+          "x-enumDescriptions": {
+            "manual": "The output schema was built field-by-field in the visual editor",
+            "json": "The output schema was pasted or edited as raw JSON"
+          },
+          "description": "How `schema` was authored in the UI. Editor state only \u2014 it does not change how\nthe output is produced. Present when set.",
+          "examples": ["manual"]
+        },
+        "mappings": {
+          "description": "Field mappings to transform data into the output format.\n\nMaps data from processing results to the output structure.\nUses Celigo's standard mapping format with extract/generate field paths \u2014\na flat array of mapping entries (each entry may recurse via its own\nnested ``mappings`` for object/array structures).\n"
+        },
+        "lookups": {
+          "type": "array",
+          "description": "Lookup tables for data enrichment during output processing.\n\nStatic key-value mappings used to translate values (e.g., status codes,\ncategory names) during output generation.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the lookup, used to reference it from mappings.\n",
+                "examples": ["statusMapping", "regionLookup"]
+              },
+              "map": {
+                "type": "object",
+                "description": "Key-value mapping object. Keys are the input values and\nvalues are the corresponding output values.\n",
+                "additionalProperties": true,
+                "examples": [
+                  {
+                    "A": "Active",
+                    "I": "Inactive",
+                    "P": "Pending"
+                  }
+                ]
+              },
+              "default": {
+                "type": "string",
+                "description": "Default value returned when the input key is not found in the map.\n",
+                "examples": ["Unknown"]
+              },
+              "allowFailures": {
+                "type": "boolean",
+                "description": "Whether to continue processing if the lookup fails to find a match\nand no default is provided.\n"
+              }
+            }
+          }
+        },
+        "hooks": {
+          "type": "object",
+          "description": "Custom script hooks for pre- and post-mapping processing.\n\nAllows running custom JavaScript functions before and after\noutput mappings are applied.\n",
+          "properties": {
+            "preMap": {
+              "type": "object",
+              "description": "Script to run before applying output mappings.\n\nCan modify the data before it is mapped to the output structure.\n",
+              "properties": {
+                "_scriptId": {
+                  "type": "string",
+                  "format": "objectId",
+                  "x-celigo-refModel": "scripts",
+                  "description": "Reference to the script resource",
+                  "examples": ["60a2c4e6f321d800129a1a3c"]
+                },
+                "function": {
+                  "type": "string",
+                  "description": "Function name to execute within the script",
+                  "examples": ["preProcessOutput", "enrichData"]
+                }
+              }
+            },
+            "postMap": {
+              "type": "object",
+              "description": "Script to run after applying output mappings.\n\nCan modify the final output data after mappings are applied.\n",
+              "properties": {
+                "_scriptId": {
+                  "type": "string",
+                  "format": "objectId",
+                  "x-celigo-refModel": "scripts",
+                  "description": "Reference to the script resource",
+                  "examples": ["60a2c4e6f321d800129a1a3c"]
+                },
+                "function": {
+                  "type": "string",
+                  "description": "Function name to execute within the script",
+                  "examples": ["postProcessOutput", "validateOutput"]
+                }
+              }
+            }
+          }
+        },
+        "debugUntil": {
+          "type": "string",
+          "format": "date-time",
+          "deprecated": true,
+          "description": "Step debug-capture expiry for the output stage. Not yet accepted on this route:\nthe value is dropped on PUT and `PATCH /output/debugUntil` is rejected as a\nnon-whitelisted path.",
+          "examples": ["2026-08-25T12:30:00.000Z"]
+        },
+        "mockInput": {
+          "type": "object",
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "User-payload sample data \u2014 interiors are freeform by design.",
+            "method": "documented-contract",
+            "verified": "2026-07-03"
+          },
+          "description": "Mock data for testing the tool's output processing.\n\nProvides sample data that would arrive from the routing/processing\nstage, used to test mapping and lookup logic. Maximum size: 1MB.\n",
+          "additionalProperties": true
+        }
+      }
+    },
+    "routers": {
+      "type": "array",
+      "description": "Optional routers for conditional processing logic.\n\nRouters allow you to direct input data to different processing branches\nbased on filter criteria or script logic. Tools only support\n\"first_matching_branch\" routing strategy.\n\nBranches can chain to other routers or use the special \"outputRouter\"\nterminal value to exit the tool.\n",
+      "items": {
+        "type": "object",
+        "description": "Configuration for conditional routing within a tool.\n\nRouters evaluate input data and direct it to different processing branches\nbased on criteria. This enables complex business logic and conditional\nprocessing within the tool.\n\nUnlike flows, tools only support \"first_matching_branch\" routing strategy.\nBranches can chain to other routers or use the special \"outputRouter\"\nterminal sink to exit the tool and return results.\n",
+        "x-celigo-ai-guidance": [
+          "Set `routeRecordsTo` and `routeRecordsUsing` together or omit both \u2014 a router with\nonly one of them fails the save with 422 `invalid_flow_router_config`.",
+          "Every branch needs at least one entry in `pageProcessors` before the tool can run:\n`POST /v1/tools/{_id}/invoke` on a tool whose branches are empty returns 400\n`tool_empty_router`."
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for this router within the tool.\n\nUsed to reference this router from other routers' branch `nextRouterId`.\n",
+            "examples": ["router_001", "validation_router"]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Human-readable name for the router.\n",
+            "examples": ["Customer Type Router", "Validation Router"]
+          },
+          "routeRecordsTo": {
+            "type": "string",
+            "enum": ["first_matching_branch"],
+            "x-enumDescriptions": {
+              "first_matching_branch": "Routes the input to the first branch whose criteria match."
+            },
+            "description": "Routing strategy. Tools only support \"first_matching_branch\",\nwhich routes to the first branch whose criteria match the input.\n",
+            "examples": ["first_matching_branch"]
+          },
+          "routeRecordsUsing": {
+            "type": "string",
+            "enum": ["input_filters", "script"],
+            "x-enumDescriptions": {
+              "input_filters": "Evaluate routing criteria using declarative filter expressions.",
+              "script": "Evaluate routing criteria using a custom JavaScript function."
+            },
+            "description": "Method used to evaluate routing criteria.\n\n- **input_filters**: Use declarative filter expressions on each branch\n- **script**: Use a custom JavaScript function to determine the branch\n",
+            "examples": ["input_filters"]
+          },
+          "script": {
+            "type": "object",
+            "description": "Script configuration when routeRecordsUsing is \"script\".\n\nThe function should return the name of the branch to route to.\n",
+            "properties": {
+              "_scriptId": {
+                "type": "string",
+                "format": "objectId",
+                "x-celigo-refModel": "scripts",
+                "description": "Reference to the script resource",
+                "examples": ["60a2c4e6f321d800129a1a3c"]
+              },
+              "function": {
+                "type": "string",
+                "description": "Function name that returns the branch name",
+                "examples": ["routeInput", "determineBranch"],
+                "x-celigo-canon": {
+                  "decision": "no-enum",
+                  "reason": "Uniform production usage is a builder default, not a contract \u2014 wrong names error loudly at runtime and users may rename freely.",
+                  "method": "full-population",
+                  "verified": "2026-07-03"
+                }
+              }
+            }
+          },
+          "branches": {
+            "type": "array",
+            "description": "List of branches defining different processing paths.\n\nEach branch has optional filter criteria and a set of processing steps.\nRecords are evaluated against branch criteria in order; the first\nmatching branch is selected.\n",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 300,
+                  "description": "Name of this branch.\n",
+                  "examples": ["Premium Customers", "Default Processing"]
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 10240,
+                  "description": "Description of when and why this branch is selected.\n",
+                  "examples": [
+                    "Selected when the customer is a premium account."
+                  ]
+                },
+                "branchId": {
+                  "type": "string",
+                  "description": "Stable identifier for this branch within the tool, generated by\nthe builder. Used to reference the branch independently of its\nposition in the branches array (e.g., from step requests).\n",
+                  "examples": ["VD0S9xQPLAH"],
+                  "x-celigo-canon": {
+                    "decision": "no-pattern",
+                    "reason": "Token format is not contracted \u2014 observed lengths vary and the builder may change its generator; modeled as a plain string.",
+                    "method": "full-population",
+                    "verified": "2026-07-03"
+                  }
+                },
+                "inputFilter": {
+                  "type": "object",
+                  "description": "Filter criteria to determine if this branch should be selected.\n\nUses Celigo's expression-based filter format.\n",
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "enum": ["1"],
+                      "x-enumDescriptions": {
+                        "1": "Version 1 of the Celigo expression-based filter format."
+                      },
+                      "description": "Filter version"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "description": "Filter rules in Celigo expression-based filter format.\n\nArray-based DSL where the first element is an operator (e.g., \"equals\", \"and\", \"or\"),\nfollowed by operands which can be nested expressions.\n",
+                      "items": {},
+                      "examples": [
+                        ["equals", ["get", "customerType"], "premium"],
+                        [
+                          "and",
+                          ["exists", ["get", "orderId"]],
+                          ["greaterThan", ["get", "amount"], 1000]
+                        ]
+                      ]
+                    }
+                  }
+                },
+                "nextRouterId": {
+                  "type": "string",
+                  "description": "Identifier of the next router to chain to after this branch completes.\n\nUse \"outputRouter\" as a special terminal value to exit the tool\nand return the processing results.\n",
+                  "examples": ["router_002", "outputRouter"],
+                  "x-celigo-canon": {
+                    "decision": "no-enum",
+                    "reason": "Free-form user-assigned router ids of varying shapes and lengths \u2014 only the outputRouter terminal value is conventional; no enum or pattern.",
+                    "method": "full-population",
+                    "verified": "2026-07-03"
+                  }
+                },
+                "pageProcessors": {
+                  "type": "array",
+                  "description": "Processing steps to execute in this branch.\n\nEach processor references an export (lookup) or import resource\nfor data retrieval or submission.\n",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["export", "import"],
+                        "x-enumDescriptions": {
+                          "export": "Retrieves data from an external system (lookup).",
+                          "import": "Sends data to an external system."
+                        },
+                        "description": "Type of processor.\n\n- **export**: Retrieves data from an external system (lookup)\n- **import**: Sends data to an external system\n"
+                      },
+                      "_exportId": {
+                        "type": "string",
+                        "format": "objectId",
+                        "x-celigo-refModel": "exports",
+                        "description": "Export resource reference (when type is \"export\")",
+                        "examples": ["60a2c4e6f321d800129a1a3c"]
+                      },
+                      "_importId": {
+                        "type": "string",
+                        "format": "objectId",
+                        "x-celigo-refModel": "imports",
+                        "description": "Import resource reference (when type is \"import\")",
+                        "examples": ["60a2c4e6f321d800129a1a3c"]
+                      },
+                      "proceedOnFailure": {
+                        "type": "boolean",
+                        "description": "Whether to continue processing subsequent steps if this\nprocessor fails.\n"
+                      },
+                      "setupInProgress": {
+                        "type": "boolean",
+                        "description": "When true, the processor's configuration is still being\nset up in the UI and the step is not yet runnable.\n"
+                      },
+                      "responseMapping": {
+                        "type": "object",
+                        "description": "Merges fields from this processor's response back onto the\nin-flight record so later processors and the tool's output\ncan read them. Extracts do NOT read the raw application\nresponse \u2014 they evaluate against the platform's canonical\nper-record envelope: for lookups (`type: \"export\"`) that is\n`{\"statusCode\", \"data\": [<result records>], \"errors\"}`, so\npaths must start from `data` (e.g. `data[0].name`); for\nimports it is `{\"id\", \"statusCode\", \"ignored\", \"_json\"}`,\nso use `id` or `_json.<path>`. Bare result-record field\nnames resolve to nothing and merge nothing.\n",
+                        "properties": {
+                          "fields": {
+                            "type": "array",
+                            "description": "Simple field-level mappings",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "extract": {
+                                  "type": "string",
+                                  "description": "Path within the canonical response envelope to\ncopy the value from (`data[0].x` / `data.0.x`\nfor lookups; `id` or `_json.<path>` for\nimports).\n",
+                                  "examples": [
+                                    "data[0].customer.name",
+                                    "data.0.fields.Product Name",
+                                    "id"
+                                  ]
+                                },
+                                "generate": {
+                                  "type": "string",
+                                  "description": "Field path on the in-flight record where the\nextracted value is stored (dot notation for\nnesting).\n",
+                                  "examples": [
+                                    "orderId",
+                                    "supplierDetails.supplierName"
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "lists": {
+                            "type": "array",
+                            "description": "List-level mappings for array data",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "generate": {
+                                  "type": "string",
+                                  "description": "Target list path",
+                                  "examples": ["lineItems"]
+                                },
+                                "fields": {
+                                  "type": "array",
+                                  "description": "Field-level mappings applied to each item in the list.",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "extract": {
+                                        "type": "string",
+                                        "description": "Source field path",
+                                        "examples": ["sku"]
+                                      },
+                                      "generate": {
+                                        "type": "string",
+                                        "description": "Target field path",
+                                        "examples": ["itemCode"]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "hooks": {
+                        "type": "object",
+                        "description": "Custom scripts for processing",
+                        "properties": {
+                          "postResponseMap": {
+                            "type": "object",
+                            "description": "Script to run after response mapping",
+                            "properties": {
+                              "_scriptId": {
+                                "type": "string",
+                                "format": "objectId",
+                                "x-celigo-refModel": "scripts",
+                                "description": "Reference to the script resource",
+                                "examples": ["60a2c4e6f321d800129a1a3c"]
+                              },
+                              "function": {
+                                "type": "string",
+                                "description": "Function name to execute",
+                                "examples": ["postProcessResponse"],
+                                "x-celigo-canon": {
+                                  "decision": "no-enum",
+                                  "reason": "User-defined script function names \u2014 no vocabulary to encode.",
+                                  "method": "full-population",
+                                  "verified": "2026-07-03"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "Server neither requires nor materializes routers \u2014 a create without them succeeds and GET serves the tool without the key; universal presence is a UI-builder artifact.",
+        "method": "live-probe",
+        "verified": "2026-07-03"
+      }
+    },
+    "aiDescription": {
+      "type": "object",
+      "description": "AI-generated descriptions and documentation for the resource.\n\nThis object contains automatically generated content that helps users\nunderstand the purpose, behavior, and configuration of the resource without\nrequiring them to analyze the technical details. The AI-generated content\nis sanitized and safe for display in the UI.\n",
+      "properties": {
+        "summary": {
+          "type": ["string", "null"],
+          "description": "Brief AI-generated summary of the resource's purpose and functionality.\n\nThis concise description provides a quick overview of what the resource does,\nwhat systems it interacts with, and its primary role in the integration.\nThe summary is suitable for display in list views, dashboards, and other\ncontexts where space is limited.\n\nMaximum length: 10KB\n",
+          "examples": [
+            "AI-generated overview of what this resource does and the systems it interacts with."
+          ]
+        },
+        "detailed": {
+          "type": ["string", "null"],
+          "description": "Comprehensive AI-generated description of the resource's functionality.\n\nThis detailed explanation covers the resource's purpose, configuration details,\ndata flow patterns, filtering logic, and other technical aspects. It provides\nin-depth information suitable for documentation, tooltips, or detailed views\nin the administration interface.\n\nThe content may include HTML formatting for improved readability.\n\nMaximum length: 10KB\n",
+          "examples": [
+            "<p>A detailed AI-generated explanation of this resource's purpose, configuration, and behavior.</p><p>The text is regenerated when the resource's configuration changes.</p>"
+          ]
+        },
+        "generatedOn": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp indicating when the AI description was generated.\n\nThis field helps track the freshness of the AI-generated content and\ndetermine when it might need to be regenerated due to changes in the\nresource's configuration or behavior.\n\nThe timestamp is recorded in ISO 8601 format with UTC timezone (Z suffix).\n",
+          "examples": ["2023-05-10T13:25:42Z"]
+        }
+      }
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "When true, this tool is a draft that auto-deletes when its expiry passes\n(`draftExpiresAt` in the response). Set at creation; an update can clear the\nflag but never set it.",
+      "x-celigo-ai-guidance": [
+        "POST with `draft: true` arms the draft TTL (the server computes `draftExpiresAt`).\nPUT with `draft: false` clears the flag and the expiry, promoting the draft to a\npermanent tool. PUT with `draft: true` on a non-draft tool is silently ignored,\nand a PUT that omits the field leaves an existing draft flag unchanged."
+      ]
+    }
+  },
+  "required": ["name", "_integrationId"]
+}

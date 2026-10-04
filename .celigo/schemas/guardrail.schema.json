@@ -1,0 +1,1585 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo guardrail",
+  "type": "object",
+  "description": "Configuration for a guardrail import. `_connectionId` is only\nrequired for BYOK `ai_agent` guardrails.",
+  "x-celigo-ai-guidance": [
+    "Guardrails evaluate structured records only. Do not send the import-level `blob` or\n`blobKeyPath` fields \u2014 either one fails the save with 422 `not_supported`\n(\"Field \"blob\" is not supported for this import type\").",
+    "Do not put a `tools` array anywhere under `guardrail.aiAgent` \u2014 a non-empty array on\nany provider block fails the save with 422 `guardrail_tools_not_allowed`."
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Display name for the guardrail.",
+      "examples": ["PII Scanner", "Content Moderator"]
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 5120,
+      "description": "Optional description of the guardrail's purpose.",
+      "examples": [
+        "Scans records for PII and masks detected values before import."
+      ]
+    },
+    "_connectionId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "connections",
+      "description": "Connection for BYOK (bring your own key) \u2014 only meaningful for `ai_agent` type\nguardrails. Optional for the built-in providers (`openai`, `gemini`, `anthropic`),\nwhich run on platform-managed credentials when it is omitted; catalog providers\n(`mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`) have no platform-managed\ncredentials and need it to run.",
+      "examples": ["68ae48d6b5f755d2dd38c294"]
+    },
+    "adaptorType": {
+      "type": "string",
+      "enum": ["GuardrailImport"],
+      "x-enumDescriptions": {
+        "GuardrailImport": "Guardrail import adaptor for safety and compliance checks."
+      },
+      "description": "Must be `GuardrailImport`.",
+      "examples": ["GuardrailImport"]
+    },
+    "guardrail": {
+      "type": "object",
+      "description": "Selects the check a guardrail applies and carries its settings. `type` picks the check\nand the matching sub-object (`pii`, `moderation`, or `aiAgent`) configures it.\nResponses echo the active sub-object with `confidenceThreshold` defaulted and also\nreturn the inactive `pii` / `moderation` siblings as empty stubs\n(`pii: {entities: [], mask: false}`, `moderation: {categories: []}`) \u2014 only the active\ntype's sub-object is meaningful. Guardrails created before the AI-agent stub was\nstripped on write may still return an inert `aiAgent` on `pii` / `moderation` guardrails.",
+      "x-celigo-ai-guidance": [
+        "Pick exactly one type. Prefer the deterministic local classifiers (`pii`, then\n`moderation`) whenever the brief's intent fits; use `ai_agent` only for custom\njudgement that has no `pii.entities` / `moderation.categories` analogue \u2014 the full\ndecision rule is on `type`.",
+        "Guardrails never invoke tools. A non-empty `tools` array anywhere under `aiAgent`\n(`aiAgent.tools`, `aiAgent.openai.tools`, `aiAgent.litellm._overrides.gemini.tools`,\n`aiAgent.litellm._overrides.anthropic.tools`) fails the save with 422\n`guardrail_tools_not_allowed`; MCP `prompts` and `resources` are still accepted."
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ai_agent", "pii", "moderation"],
+          "x-enumDescriptions": {
+            "ai_agent": "Evaluate data using an AI model with custom instructions.",
+            "pii": "Detect personally identifiable information in data fields.",
+            "moderation": "Check content for harmful or inappropriate categories."
+          },
+          "description": "The type of guardrail to apply. Each type requires its corresponding\nsub-configuration object (`aiAgent`, `pii`, or `moderation`).",
+          "x-celigo-ai-guidance": [
+            "The type of guardrail to apply.\nPick exactly one \u2014 `pii` / `moderation` / `ai_agent` are mutually exclusive at\nthe type level (a brief that wants both runs as two guardrails in sequence,\nnot one).",
+            "## How to choose\n\nApply these rules **in order** and pick the first match.  Do\nNOT skip ahead to `ai_agent` just because the brief is in\nnatural language \u2014 `pii` and `moderation` are also expressed\nas natural-language briefs.  The decision is about WHAT the\nbrief asks the guardrail to detect, not how the brief is\nworded.\n\n1. **`pii`** \u2014 pick this when the brief names ANY personally\n   identifiable information, OR when the brief names entity\n   categories (SSN, email, phone, credit card, address, name,\n   passport, license, account number, etc.) that match\n   `pii.entities`.  Examples that route here:\n   \"detect SSN and credit card numbers\", \"mask customer\n   emails and phone numbers\", \"scan for PII\".\n\n2. **`moderation`** \u2014 pick this when the brief asks the\n   guardrail to detect harmful, inappropriate, unsafe, or\n   policy-violating CONTENT (as opposed to PII data fields)\n   AND the intent maps to any value in `moderation.categories`\n   (`sexual`, `hate`, `harassment`, `self_harm`, `violence`,\n   `illicit`, etc.) \u2014 including via close synonyms.  Apply\n   the synonym mapping liberally:\n   - \"explicit\", \"obscene\", \"vulgar\", \"profane\",\n     \"inappropriate language\", \"swearing\", \"NSFW\" \u2192 typically\n     maps to `sexual` and/or `harassment`\n   - \"abusive\", \"insulting\", \"bullying\", \"toxic\" \u2192 `harassment`\n   - \"hateful\", \"discriminatory\", \"racist\", \"sexist\" \u2192 `hate`\n   - \"threatening\", \"intimidating\" \u2192 `harassment_threatening`\n     or `violence`\n   - \"graphic violence\", \"gore\" \u2192 `violence_graphic`\n   - \"suicide\", \"self-injury\" \u2192 `self_harm`\n   - \"drugs\", \"weapons\", \"illegal activity\" \u2192 `illicit`\n   Briefs like \"screen email body for explicit language\",\n   \"block toxic chat messages\", \"flag harassment in support\n   tickets\", \"moderate user-generated content for unsafe\n   material\" all route to `moderation`.  When the brief uses\n   a synonym, populate `moderation.categories` with the\n   closest enum value(s) \u2014 do NOT invent new category\n   strings; the enum is fixed.\n\n3. **`ai_agent`** \u2014 pick this ONLY when the brief asks for\n   judgement that doesn't fit `pii` or `moderation`.  Typical\n   triggers: domain-specific compliance checks (HIPAA / SOX\n   rule evaluation), business-policy validation (price\n   bounds, approval thresholds), data-quality assertions\n   (required fields populated, values plausible), or any\n   \"evaluate against these custom rules\" framing where the\n   rules are domain-specific and have no `pii.entities` /\n   `moderation.categories` analogue.  If you can map the\n   brief's intent to a moderation category (even via a\n   synonym above), use `moderation` instead \u2014 `ai_agent` is\n   the catch-all, not the default.\n\nTie-breaker for borderline cases: prefer the more specific\ntype (`pii` > `moderation` > `ai_agent`).  `pii` and\n`moderation` are local deterministic classifiers with fixed\nenums \u2014 they're cheaper, faster, and more predictable than\n`ai_agent` (which calls a real LLM per record).  Default to\nthe cheaper path whenever the intent fits.",
+            "## Sub-configuration requirements (one per type)\n\n- **ai_agent** requires the `aiAgent` sub-configuration.\n- **pii** requires the `pii` sub-configuration with at least\n  one entity from `pii.entities`.\n- **moderation** requires the `moderation` sub-configuration\n  with at least one category from `moderation.categories`."
+          ]
+        },
+        "confidenceThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "x-celigo-ui-override": "Required by the guardrail form (confidenceThreshold is required:true once a type is selected, default 0.7). Encoded to mirror the form so builders produce connectable configurations.",
+          "x-celigo-canon": {
+            "decision": "stricter-than-server",
+            "reason": "Required as a documented form mirror (with the form default) \u2014 the API itself defaults it on write; kept so builders produce connectable configurations.",
+            "method": "documented-contract",
+            "verified": "2026-07-04"
+          },
+          "description": "Confidence threshold (0 to 1). Detections below this threshold are\nignored. Lower values catch more issues but increase false positives.",
+          "x-celigo-ai-guidance": [
+            "Confidence threshold for guardrail detection (0 to 1).",
+            "Only detections with confidence at or above this threshold will be flagged.\nLower values catch more potential issues but may increase false positives."
+          ],
+          "examples": [0.7, 0.5, 0.9]
+        },
+        "aiAgent": {
+          "type": "object",
+          "description": "LLM configuration for the check; set when `type` is `ai_agent` and validated\nagainst `GuardrailAiAgentConfig`. On `pii` / `moderation` guardrails a legacy\nserver-written stub may appear here \u2014 it is inert, and current servers strip it on\nwrite."
+        },
+        "pii": {
+          "type": "object",
+          "required": ["entities"],
+          "description": "PII detection configuration. Required when `type` is `pii`.",
+          "x-celigo-ai-guidance": [
+            "Configuration for PII (Personally Identifiable Information) detection.",
+            "Required when `guardrail.type` is \"pii\".\nAt least one entity type must be specified."
+          ],
+          "properties": {
+            "entities": {
+              "type": "array",
+              "description": "PII entity types to detect. When `type` is `pii`, at least one\nentry is required; the inactive sibling on other guardrail types\nmay be served with an empty list.",
+              "x-celigo-ai-guidance": [
+                "PII entity types to detect in the data.",
+                "At least one entity must be specified when using PII guardrails."
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "credit_card_number",
+                  "card_security_code_cvv_cvc",
+                  "cryptocurrency_wallet_address",
+                  "date_and_time",
+                  "email_address",
+                  "iban_code",
+                  "bic_swift_bank_identifier_code",
+                  "ip_address",
+                  "location",
+                  "medical_license_number",
+                  "national_registration_number",
+                  "persons_name",
+                  "phone_number",
+                  "url",
+                  "us_bank_account_number",
+                  "us_drivers_license",
+                  "us_itin",
+                  "us_passport_number",
+                  "us_social_security_number",
+                  "uk_nhs_number",
+                  "uk_national_insurance_number",
+                  "spanish_nif",
+                  "spanish_nie",
+                  "italian_fiscal_code",
+                  "italian_drivers_license",
+                  "italian_vat_code",
+                  "italian_passport",
+                  "italian_identity_card",
+                  "polish_pesel",
+                  "finnish_personal_identity_code",
+                  "singapore_nric_fin",
+                  "singapore_uen",
+                  "australian_abn",
+                  "australian_acn",
+                  "australian_tfn",
+                  "australian_medicare",
+                  "indian_pan",
+                  "indian_aadhaar",
+                  "indian_vehicle_registration",
+                  "indian_voter_id",
+                  "indian_passport",
+                  "korean_resident_registration_number"
+                ],
+                "x-enumDescriptions": {
+                  "credit_card_number": "Credit or debit card number (e.g., Visa, Mastercard, Amex).",
+                  "card_security_code_cvv_cvc": "Card security code printed on credit or debit cards (CVV/CVC).",
+                  "cryptocurrency_wallet_address": "Cryptocurrency wallet address (e.g., Bitcoin, Ethereum).",
+                  "date_and_time": "Date and/or time values that could identify an individual.",
+                  "email_address": "Email address in standard format.",
+                  "iban_code": "International Bank Account Number used for cross-border payments.",
+                  "bic_swift_bank_identifier_code": "BIC/SWIFT code identifying a specific bank for international transfers.",
+                  "ip_address": "IPv4 or IPv6 network address.",
+                  "location": "Physical location or geographic coordinates.",
+                  "medical_license_number": "Medical professional license or registration number.",
+                  "national_registration_number": "National identification or registration number.",
+                  "persons_name": "Full or partial name of a person.",
+                  "phone_number": "Telephone number in any format.",
+                  "url": "Web URL or URI.",
+                  "us_bank_account_number": "United States bank account number.",
+                  "us_drivers_license": "United States driver's license number.",
+                  "us_itin": "United States Individual Taxpayer Identification Number.",
+                  "us_passport_number": "United States passport number.",
+                  "us_social_security_number": "United States Social Security Number (SSN).",
+                  "uk_nhs_number": "United Kingdom National Health Service number.",
+                  "uk_national_insurance_number": "United Kingdom National Insurance number.",
+                  "spanish_nif": "Spanish tax identification number (NIF).",
+                  "spanish_nie": "Spanish foreigner identification number (NIE).",
+                  "italian_fiscal_code": "Italian fiscal code (Codice Fiscale).",
+                  "italian_drivers_license": "Italian driver's license number.",
+                  "italian_vat_code": "Italian VAT identification number (Partita IVA).",
+                  "italian_passport": "Italian passport number.",
+                  "italian_identity_card": "Italian national identity card number.",
+                  "polish_pesel": "Polish national identification number (PESEL).",
+                  "finnish_personal_identity_code": "Finnish personal identity code (henkilotunnus).",
+                  "singapore_nric_fin": "Singapore National Registration Identity Card or Foreign Identification Number.",
+                  "singapore_uen": "Singapore Unique Entity Number for business registration.",
+                  "australian_abn": "Australian Business Number.",
+                  "australian_acn": "Australian Company Number.",
+                  "australian_tfn": "Australian Tax File Number.",
+                  "australian_medicare": "Australian Medicare card number.",
+                  "indian_pan": "Indian Permanent Account Number for tax purposes.",
+                  "indian_aadhaar": "Indian Aadhaar unique identity number.",
+                  "indian_vehicle_registration": "Indian vehicle registration number.",
+                  "indian_voter_id": "Indian voter identification card number.",
+                  "indian_passport": "Indian passport number.",
+                  "korean_resident_registration_number": "South Korean resident registration number."
+                }
+              },
+              "examples": [
+                ["email_address", "phone_number", "persons_name"],
+                ["us_social_security_number", "credit_card_number"]
+              ],
+              "x-celigo-canon": {
+                "decision": "verified-exact",
+                "reason": "Item enum is server-enforced \u2014 a bogus entity is hard-rejected with a Mongoose enum error and the full population contains zero out-of-enum values.",
+                "method": "live-probe",
+                "verified": "2026-07-04"
+              }
+            },
+            "mask": {
+              "type": "boolean",
+              "default": false,
+              "description": "When true, detected PII is replaced with masked values.\nWhen false, PII is flagged without modification.",
+              "x-celigo-ai-guidance": [
+                "Whether to mask detected PII values in the output."
+              ],
+              "x-celigo-canon": {
+                "decision": "not-required",
+                "reason": "Server defaults the value on write \u2014 universal presence on recent docs is the server default; requiring it would reject valid creates.",
+                "method": "live-probe",
+                "verified": "2026-07-04"
+              }
+            }
+          }
+        },
+        "moderation": {
+          "type": "object",
+          "required": ["categories"],
+          "description": "Content moderation configuration. Required when `type` is `moderation`.",
+          "x-celigo-ai-guidance": [
+            "Required when `guardrail.type` is \"moderation\".\nAt least one category must be specified."
+          ],
+          "properties": {
+            "categories": {
+              "type": "array",
+              "description": "Content moderation categories to check. When `type` is\n`moderation`, at least one entry is required; the inactive\nsibling on other guardrail types may be served with an empty\nlist.",
+              "x-celigo-ai-guidance": [
+                "At least one category must be specified when using moderation guardrails."
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "sexual",
+                  "sexual_minors",
+                  "hate",
+                  "hate_threatening",
+                  "harassment",
+                  "harassment_threatening",
+                  "self_harm",
+                  "self_harm_intent",
+                  "self_harm_instructions",
+                  "violence",
+                  "violence_graphic",
+                  "illicit",
+                  "illicit_violent"
+                ],
+                "x-enumDescriptions": {
+                  "sexual": "Content depicting sexual activity or explicit sexual material.",
+                  "sexual_minors": "Sexual content involving minors.",
+                  "hate": "Content expressing hatred toward a group based on protected characteristics.",
+                  "hate_threatening": "Hateful content that includes threats of violence or serious harm.",
+                  "harassment": "Content that targets, intimidates, or bullies an individual.",
+                  "harassment_threatening": "Harassment content that includes threats of violence or serious harm.",
+                  "self_harm": "Content that promotes or depicts self-harm behaviors.",
+                  "self_harm_intent": "Content expressing intent to engage in self-harm.",
+                  "self_harm_instructions": "Content providing instructions for self-harm methods.",
+                  "violence": "Content depicting or promoting physical violence.",
+                  "violence_graphic": "Graphic or gory depictions of violence or injury.",
+                  "illicit": "Content promoting illegal activities or unlawful behavior.",
+                  "illicit_violent": "Content promoting illegal activities that involve violence."
+                }
+              },
+              "examples": [
+                ["hate", "violence", "harassment"],
+                ["sexual", "self_harm", "illicit"]
+              ],
+              "x-celigo-canon": {
+                "decision": "verified-exact",
+                "reason": "Item enum is server-enforced \u2014 a bogus category is hard-rejected with a Mongoose enum error and the full population contains zero out-of-enum values.",
+                "method": "live-probe",
+                "verified": "2026-07-04"
+              }
+            }
+          }
+        }
+      },
+      "required": ["type", "confidenceThreshold"],
+      "if": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "const": "pii"
+          }
+        }
+      },
+      "then": {
+        "required": ["pii"],
+        "properties": {
+          "pii": {
+            "required": ["entities"],
+            "properties": {
+              "entities": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "const": "moderation"
+            }
+          }
+        },
+        "then": {
+          "required": ["moderation"],
+          "properties": {
+            "moderation": {
+              "required": ["categories"],
+              "properties": {
+                "categories": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        },
+        "else": {
+          "required": ["aiAgent"],
+          "properties": {
+            "aiAgent": {
+              "type": "object",
+              "description": "LLM configuration for an `ai_agent` guardrail \u2014 which provider and model evaluate each\nrecord, with instructions, parameter tuning, and output format. Guardrails never invoke\ntools, so unlike an AI agent import no block here accepts a `tools` array; MCP `prompts`\nand `resources` remain available. Providers come in two families with two configuration\nformats:\n\n- **Built-in providers** \u2014 each has its own configuration block.\n  - **openai**: OpenAI models (GPT-4.1, GPT-5, etc.). Configure via the `openai` object.\n  - **gemini**: Google Gemini models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.gemini`.\n  - **anthropic**: Anthropic Claude models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.anthropic`.\n- **Catalog providers** \u2014 `mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`. Added\n  as catalog data rather than platform code, they share one generic flat format:\n  `model`, `modelOptions`, `instructions`, `output`, and the `prompts` / `resources`\n  arrays directly on this object.\n\nA `_connectionId` on the parent import selects bring-your-own-key (BYOK)\ncredentials. Without one, built-in providers run on platform-managed\ncredentials; catalog providers have no platform-managed credentials, so they\nsave without a connection but cannot run until one is attached.\n",
+              "x-celigo-ai-guidance": [
+                "Do not send `tools` on any block. A non-empty array at `tools`, `openai.tools`,\n`litellm._overrides.gemini.tools`, or `litellm._overrides.anthropic.tools` fails the\nsave with 422 `guardrail_tools_not_allowed` naming that path. Responses still echo\n`openai.tools: []` on OpenAI guardrails; do not copy it back into a write."
+              ],
+              "x-celigo-canon": {
+                "decision": "verified-exact",
+                "reason": "The tools arrays are absent by design \u2014 the server rejects a non-empty tools array on every provider block of a guardrail. Do not re-point this schema at the import spec's tool-bearing AI agent config.",
+                "method": "live-probe",
+                "verified": "2026-09-21"
+              },
+              "required": ["provider"],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "openai",
+                    "gemini",
+                    "anthropic",
+                    "mistral",
+                    "xai",
+                    "huggingface",
+                    "deepseek",
+                    "cohere",
+                    "groq"
+                  ],
+                  "x-enumDescriptions": {
+                    "openai": "Use OpenAI models via the OpenAI Responses API (built-in; `openai` block).",
+                    "gemini": "Use Google Gemini models via the LiteLLM proxy (built-in; `litellm` block).",
+                    "anthropic": "Use Anthropic Claude models via the LiteLLM proxy (built-in; `litellm` block).",
+                    "mistral": "Use Mistral models (catalog provider; generic flat format, BYOK).",
+                    "xai": "Use xAI Grok models (catalog provider; generic flat format, BYOK).",
+                    "huggingface": "Use Hugging Face inference endpoint models (catalog provider; generic flat format, BYOK).",
+                    "deepseek": "Use DeepSeek models (catalog provider; generic flat format, BYOK).",
+                    "cohere": "Use Cohere models (catalog provider; generic flat format, BYOK).",
+                    "groq": "Use Groq-hosted models (catalog provider; generic flat format, BYOK)."
+                  },
+                  "description": "AI provider to use.",
+                  "x-celigo-canon": {
+                    "decision": "verified-exact",
+                    "reason": "The server rejects any other value with `provider_not_found`; catalog providers are seeded as data, so new values can appear without a platform release \u2014 re-verify before adding one here.",
+                    "method": "live-probe",
+                    "verified": "2026-09-17"
+                  },
+                  "x-celigo-ai-guidance": [
+                    "The provider decides the configuration format, and the server rejects a\nmismatch with 422 `invalid_provider_config_format`: `openai` needs the\n`openai` block, `gemini` and `anthropic` need the `litellm` block (Gemini- or\nClaude-specific settings under `litellm._overrides`), and the catalog\nproviders (`mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`) need the\ngeneric flat format \u2014 `model` and `modelOptions` directly on this object,\nnever an `openai` or `litellm` block.",
+                    "Catalog providers are BYOK-only at run time: the guardrail saves without a\n`_connectionId`, but its first run fails with 422 `invalid_request` (\"No API\nkey configured for provider \u2026\"). Always attach an HTTP connection to the\nvendor's API (token auth) when the provider is a catalog provider."
+                  ]
+                },
+                "model": {
+                  "type": "string",
+                  "description": "Model identifier for a catalog provider (generic flat format) \u2014 for example\n`grok-4.6`. Built-in providers set the model inside their own block\n(`openai.model`, `litellm.model`) instead.",
+                  "x-celigo-canon": {
+                    "decision": "no-enum",
+                    "reason": "Open string by design \u2014 the catalog's model list changes without a spec release, and a BYOK connection passes any model string through to the vendor.",
+                    "method": "live-probe",
+                    "verified": "2026-09-17"
+                  },
+                  "x-celigo-ai-guidance": [
+                    "Required for every catalog provider \u2014 omitting it or sending an empty string\nfails the save with 422 `missing_required_field`.",
+                    "Without a `_connectionId` on the parent import the model must be one the\ncatalog lists for the provider: an unknown id fails the save with 422\n`model_not_found`, a listed-but-disabled id with 422 `model_disabled`. With a\n`_connectionId` (BYOK) any model string saves \u2014 the server does not check it\nagainst the catalog or the vendor."
+                  ]
+                },
+                "modelOptions": {
+                  "type": "object",
+                  "description": "Model tuning for a catalog provider (generic flat format). Which keys, values, and\nranges are accepted is defined per catalog model and validated on save when the\nmodel is a catalog entry.",
+                  "properties": {
+                    "maxOutputTokens": {
+                      "type": "number",
+                      "description": "Maximum number of tokens the model may generate."
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "description": "Sampling temperature."
+                    },
+                    "topP": {
+                      "type": "number",
+                      "description": "Nucleus sampling threshold."
+                    },
+                    "reasoning_effort": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high", "xhigh"],
+                      "x-enumDescriptions": {
+                        "low": "Minimal reasoning before answering.",
+                        "medium": "Moderate reasoning.",
+                        "high": "Extensive reasoning.",
+                        "xhigh": "Maximum reasoning."
+                      },
+                      "description": "Reasoning depth for models that expose it."
+                    }
+                  },
+                  "x-celigo-canon": {
+                    "decision": "no-constraint",
+                    "reason": "Bounds and the accepted key set differ per catalog model and are enforced by the server's per-model schema; encoding one model's limits here would be wrong for the next.",
+                    "method": "live-probe",
+                    "verified": "2026-09-17"
+                  },
+                  "x-celigo-ai-guidance": [
+                    "When the model is a catalog entry, the server validates this object against\nthat model's schema and fails the save with 422 `invalid_model_options`\nnaming the key: unknown keys are rejected, `reasoning_effort` must be one of\nthe enum values where the model accepts it at all (xAI's `grok-4.6` does;\nDeepSeek's `deepseek-chat` rejects the key), and numeric bounds apply \u2014\non `grok-4.6`, `temperature` \u2264 2, `topP` \u2264 1, `maxOutputTokens` \u2265 100.",
+                    "With a `_connectionId` and a model the catalog does not list, the object is\npassed through unvalidated \u2014 send only options the vendor's API accepts."
+                  ]
+                },
+                "instructions": {
+                  "type": "string",
+                  "description": "System prompt for a catalog provider (generic flat format). Built-in providers\nset it inside their own block (`openai.instructions`,\n`litellm._overrides.anthropic.systemInstruction`)."
+                },
+                "output": {
+                  "type": "object",
+                  "description": "Output format for a catalog provider (generic flat format). Built-in providers\nconfigure it inside their own block (`openai.output`, `litellm.responseFormat`).",
+                  "properties": {
+                    "format": {
+                      "type": "object",
+                      "description": "Controls the structure of the model's output.",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": ["text", "json_schema"],
+                          "x-enumDescriptions": {
+                            "text": "Free-form text.",
+                            "json_schema": "Structured JSON conforming to `jsonSchema`."
+                          },
+                          "description": "Output type.",
+                          "x-celigo-ai-guidance": [
+                            "`blob` is not accepted here \u2014 the save fails with 422\n`unsupported_output_format` naming the model (verified on `grok-4.6`)."
+                          ]
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the JSON schema, for `json_schema` output."
+                        },
+                        "strict": {
+                          "type": "boolean",
+                          "description": "When true, the model must conform exactly to `jsonSchema`."
+                        },
+                        "jsonSchema": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "JSON Schema the structured output must conform to, for `json_schema` output.",
+                          "x-celigo-canon": {
+                            "decision": "no-constraint",
+                            "reason": "User-authored JSON Schema payload \u2014 interiors are freeform by design; do not model keys.",
+                            "method": "live-probe",
+                            "verified": "2026-09-17"
+                          }
+                        }
+                      }
+                    },
+                    "verbose": {
+                      "type": "string",
+                      "description": "Level of detail in the model's response, for models that expose it."
+                    }
+                  }
+                },
+                "tools": {
+                  "type": "array",
+                  "deprecated": true,
+                  "description": "Not available on guardrails: a non-empty array fails the save with 422\n`guardrail_tools_not_allowed`. Kept in source only because the field exists on the\nshared import model.",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "prompts": {
+                  "type": "array",
+                  "description": "MCP prompt entries available to a catalog-provider guardrail (generic flat format).\nEach entry references one MCP connection and the prompt names allowed from it.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["mcp"],
+                        "x-enumDescriptions": {
+                          "mcp": "Reference prompts exposed by an MCP server."
+                        },
+                        "description": "Type of prompt entry. Always \"mcp\"."
+                      },
+                      "mcp": {
+                        "type": "object",
+                        "properties": {
+                          "_mcpConnectionId": {
+                            "type": "string",
+                            "format": "objectId",
+                            "x-celigo-refModel": "connections",
+                            "description": "Connection to the MCP server that exposes the prompts."
+                          },
+                          "allowedPrompts": {
+                            "type": "array",
+                            "description": "Prompt names the model may fetch from the server.",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "x-celigo-ai-guidance": [
+                    "An unknown `_mcpConnectionId` fails the save with 422 `invalid_ref` naming\nthe array index."
+                  ]
+                },
+                "resources": {
+                  "type": "array",
+                  "description": "Governed MCP resources \u2014 read-only reference content (policies, schemas, documentation)\npulled from connected MCP servers and made available to the agent as a consistent source\nof truth. Each entry references one MCP connection and the specific resources allowed from it.",
+                  "items": {
+                    "type": "object",
+                    "required": ["type", "mcp"],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["mcp"],
+                        "x-enumDescriptions": {
+                          "mcp": "Reference read-only resources exposed by an MCP server."
+                        },
+                        "description": "Type of resource entry. Always \"mcp\"."
+                      },
+                      "mcp": {
+                        "type": "object",
+                        "required": ["_mcpConnectionId", "allowedResources"],
+                        "description": "MCP server resource configuration.",
+                        "properties": {
+                          "_mcpConnectionId": {
+                            "type": "string",
+                            "format": "objectId",
+                            "x-celigo-refModel": "connections",
+                            "description": "Connection to the MCP server that exposes the resources."
+                          },
+                          "allowedResources": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Resources to expose to the agent from the MCP server. Must contain at least one\nentry; each entry identifies one resource by name and URI.",
+                            "items": {
+                              "type": "object",
+                              "required": ["name", "uri"],
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "description": "Display name of the MCP resource.",
+                                  "examples": ["Data Retention Policy"]
+                                },
+                                "uri": {
+                                  "type": "string",
+                                  "description": "URI that identifies the resource on the MCP server.",
+                                  "examples": [
+                                    "resource://policies/data-retention"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "openai": {
+                  "type": "object",
+                  "description": "OpenAI-specific configuration. Used when `provider` is \"openai\".\n",
+                  "required": ["model", "instructions"],
+                  "properties": {
+                    "instructions": {
+                      "type": "string",
+                      "maxLength": 1000000,
+                      "description": "System prompt that defines the check's behavior, goals, and constraints.\n",
+                      "examples": [
+                        "You are a data validation agent. Check each record for completeness."
+                      ],
+                      "x-celigo-ui-override": "Required by the AI agent configuration form (the model's system prompt). Encoded here to mirror the form so builders produce connectable configurations."
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "OpenAI model identifier. Open string (not an enum) \u2014 model names change frequently.",
+                      "examples": [
+                        "gpt-5.4",
+                        "gpt-5.4-pro",
+                        "gpt-5-mini",
+                        "gpt-5-nano",
+                        "gpt-4.1-mini",
+                        "gpt-4o"
+                      ],
+                      "x-celigo-ui-override": "Required by the AI agent configuration form. Encoded here to mirror the form so builders produce connectable configurations.",
+                      "x-celigo-canon": {
+                        "decision": "no-enum",
+                        "reason": "Deliberately an open string \u2014 model names churn faster than the spec.",
+                        "method": "full-population",
+                        "verified": "2026-07-03"
+                      },
+                      "x-celigo-ai-guidance": [
+                        "With platform-managed credentials (no `_connectionId` on the parent\nimport), the model must be one the platform hosts. The save does not\ncheck this \u2014 an unlisted model saves, and the guardrail's first run fails\nwith 422 `invalid_model`, whose message lists the hosted models. A\nBYOK connection bypasses the hosted list and the model string is\npassed through to the provider as-is."
+                      ]
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "description": "Controls depth of reasoning for complex tasks.",
+                      "x-celigo-ai-guidance": [
+                        "Supported on reasoning-capable OpenAI models only (currently the GPT-5 family and the o-series).\nSetting `reasoning` on a non-reasoning model (e.g.\n`gpt-4.1-mini`) is rejected by the provider at runtime \u2014 omit the field on those models."
+                      ],
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "x-enumDescriptions": {
+                            "none": "No additional reasoning effort.",
+                            "minimal": "Least reasoning effort for simple, straightforward tasks.",
+                            "low": "Light reasoning for moderately simple tasks.",
+                            "medium": "Balanced reasoning effort for typical tasks.",
+                            "high": "Extensive reasoning effort for complex, multi-step tasks.",
+                            "xhigh": "Extended reasoning effort beyond high for demanding tasks.",
+                            "max": "Highest available reasoning effort."
+                          },
+                          "description": "How much reasoning effort the model should invest",
+                          "x-celigo-ai-guidance": [
+                            "How much reasoning effort the model should invest.\nReasoning- capable models only \u2014 see `reasoning` for the gating rule."
+                          ]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "enum": ["concise", "auto", "detailed"],
+                          "x-enumDescriptions": {
+                            "concise": "Brief, high-level reasoning summary.",
+                            "auto": "Let the model decide the appropriate level of detail.",
+                            "detailed": "Comprehensive reasoning summary with full explanations."
+                          },
+                          "description": "Level of detail in reasoning summaries",
+                          "x-celigo-ai-guidance": [
+                            "Level of detail in reasoning summaries.\nReasoning-capable models only \u2014 see `reasoning` for the gating rule."
+                          ]
+                        }
+                      }
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "Sampling temperature. Higher values (e.g. 1.5) produce more creative output,\nlower values (e.g. 0.2) produce more focused and deterministic output.\n"
+                    },
+                    "topP": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 1,
+                      "description": "Nucleus sampling parameter"
+                    },
+                    "topLogprobs": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 20,
+                      "description": "Number of most likely tokens to return log probabilities for at each output position."
+                    },
+                    "maxOutputTokens": {
+                      "type": "number",
+                      "minimum": 100,
+                      "maximum": 128000,
+                      "description": "Maximum number of tokens in the model's response. Unlike an AI agent import, a guardrail does not receive a server-written value when this is omitted."
+                    },
+                    "serviceTier": {
+                      "type": "string",
+                      "enum": ["auto", "default", "priority"],
+                      "x-enumDescriptions": {
+                        "auto": "Let OpenAI automatically select the appropriate service tier.",
+                        "default": "Standard service tier with normal rate limits and latency.",
+                        "priority": "Premium tier with higher rate limits and lower latency at increased cost."
+                      },
+                      "description": "OpenAI service tier. \"priority\" provides higher rate limits and\nlower latency at increased cost.",
+                      "x-celigo-ai-guidance": [
+                        "BYOK only.\nPlatform-managed credentials (no `_connectionId` on the parent import) always\nrun at `default` regardless of what's set here."
+                      ]
+                    },
+                    "output": {
+                      "type": "object",
+                      "description": "Output format configuration",
+                      "properties": {
+                        "format": {
+                          "type": "object",
+                          "description": "Controls the structure of the model's output.\n",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": ["text", "json_schema", "blob"],
+                              "x-enumDescriptions": {
+                                "text": "Free-form text response from the model.",
+                                "json_schema": "Structured JSON output conforming to a defined schema.",
+                                "blob": "Binary data output for non-text content."
+                              },
+                              "description": "Output format type."
+                            },
+                            "schemaMode": {
+                              "type": "string",
+                              "enum": ["manual", "json"],
+                              "x-enumDescriptions": {
+                                "manual": "The schema was built field-by-field in the visual editor.",
+                                "json": "The schema was pasted or edited as raw JSON."
+                              },
+                              "description": "How the structured-output schema was authored in the UI.\nEditor state only \u2014 it does not change how `jsonSchema` is\nsent to the provider."
+                            },
+                            "name": {
+                              "type": "string",
+                              "description": "Name for the output format (used with json_schema)",
+                              "x-celigo-ui-override": "Required by the AI agent form when output format type is json_schema. Encoded here to mirror the form so builders produce connectable configurations.",
+                              "x-celigo-canon": {
+                                "decision": "no-enum",
+                                "reason": "Free-form user-chosen format name \u2014 no vocabulary to encode.",
+                                "method": "full-population",
+                                "verified": "2026-07-04"
+                              }
+                            },
+                            "strict": {
+                              "type": "boolean",
+                              "description": "When true, enforces strict schema validation on output.",
+                              "x-celigo-ai-guidance": [
+                                "Whether to enforce strict schema validation on output"
+                              ]
+                            },
+                            "jsonSchema": {
+                              "type": "object",
+                              "description": "JSON Schema for structured output. Required when `format.type` is \"json_schema\".\n",
+                              "x-celigo-ui-override": "Required by the AI agent form when output format type is json_schema. Encoded here to mirror the form so builders produce connectable configurations.",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "description": "Root JSON Schema type of the structured output; use \"object\" for record-shaped results.",
+                                  "enum": [
+                                    "object",
+                                    "array",
+                                    "string",
+                                    "number",
+                                    "integer",
+                                    "boolean"
+                                  ],
+                                  "x-enumDescriptions": {
+                                    "object": "JSON object with named properties.",
+                                    "array": "Ordered list of values.",
+                                    "string": "Text string value.",
+                                    "number": "Numeric value including decimals.",
+                                    "integer": "Whole number value without decimals.",
+                                    "boolean": "True or false value."
+                                  }
+                                },
+                                "properties": {
+                                  "type": "object",
+                                  "additionalProperties": true,
+                                  "description": "JSON Schema definitions for each field the structured output may contain.",
+                                  "x-celigo-canon": {
+                                    "decision": "no-constraint",
+                                    "reason": "User-authored JSON Schema payload \u2014 interiors are freeform by design; do not model keys.",
+                                    "method": "full-population",
+                                    "verified": "2026-07-03"
+                                  }
+                                },
+                                "required": {
+                                  "type": "array",
+                                  "description": "Property names the model must include in the structured output.",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "additionalproperties": {
+                                  "type": "boolean",
+                                  "description": "When true, the structured output may include properties beyond those defined in `properties`."
+                                }
+                              }
+                            },
+                            "schema": {
+                              "type": "object",
+                              "readOnly": true,
+                              "additionalProperties": true,
+                              "description": "Server-written copy of `jsonSchema`, present in responses once `jsonSchema`\nis set. Send `jsonSchema`, not this field."
+                            }
+                          },
+                          "if": {
+                            "properties": {
+                              "type": {
+                                "const": "json_schema"
+                              }
+                            },
+                            "required": ["type"]
+                          },
+                          "then": {
+                            "required": ["name", "jsonSchema"]
+                          }
+                        },
+                        "verbose": {
+                          "type": "string",
+                          "enum": ["low", "medium", "high"],
+                          "x-enumDescriptions": {
+                            "low": "Minimal detail in the model's response.",
+                            "medium": "Moderate detail in the model's response, the default level.",
+                            "high": "Maximum detail and verbosity in the model's response."
+                          },
+                          "description": "Level of detail in the model's response",
+                          "x-celigo-ai-guidance": [
+                            "Supported on the GPT-5 family only. Other OpenAI models (e.g.\n`gpt-4.1`, `gpt-4.1-mini`,\n`gpt-4.1-nano`) accept only `medium` (the no-op default) \u2014 `low` and `high` are\nrejected by the provider at runtime.\nOmit the field entirely on non-GPT-5 models rather than relying on the default."
+                          ]
+                        }
+                      }
+                    },
+                    "tools": {
+                      "type": "array",
+                      "deprecated": true,
+                      "description": "Always an empty array on guardrails saved today: the server writes `[]` and\nrejects a non-empty array with 422 `guardrail_tools_not_allowed`. Guardrails\nsaved before the restriction may still return their stored entries.",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "prompts": {
+                      "type": "array",
+                      "description": "MCP prompt entries available to the guardrail's model. Each item references one\nMCP connection and the prompt names allowed from it.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": ["mcp"],
+                            "x-enumDescriptions": {
+                              "mcp": "Connect to an MCP server to use its exposed prompts."
+                            },
+                            "description": "Type of prompt entry. Always \"mcp\"."
+                          },
+                          "mcp": {
+                            "type": "object",
+                            "description": "MCP server prompt configuration.",
+                            "properties": {
+                              "_mcpConnectionId": {
+                                "type": "string",
+                                "format": "objectId",
+                                "x-celigo-refModel": "connections",
+                                "description": "Connection to the MCP server."
+                              },
+                              "allowedPrompts": {
+                                "type": "array",
+                                "description": "Prompt names to allow from the MCP server.",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "resources": {
+                      "_circularRef": "../../../import/components/schemas/aiagent.yml#/McpResources"
+                    }
+                  }
+                },
+                "litellm": {
+                  "type": "object",
+                  "description": "LiteLLM proxy configuration. Used when `provider` is \"gemini\" or \"anthropic\".\n\nLiteLLM provides a unified interface to multiple AI providers. Gemini-specific\nsettings are in `_overrides.gemini`; Claude-specific settings are in\n`_overrides.anthropic`.\n\n`model` is required when litellm is the active provider path.\n",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "description": "LiteLLM model identifier. For Gemini, models are stored without the `gemini/`\nprefix; for Anthropic, use the Claude model id (e.g. `claude-sonnet-4-6`).",
+                      "examples": [
+                        "gemini-2.5-flash",
+                        "gemini-2.5-pro",
+                        "gemini-2.5-flash-lite",
+                        "claude-sonnet-4-6",
+                        "claude-opus-4-7"
+                      ],
+                      "x-celigo-canon": {
+                        "decision": "no-enum",
+                        "reason": "Deliberately an open string \u2014 model names churn faster than the spec.",
+                        "method": "full-population",
+                        "verified": "2026-07-03"
+                      },
+                      "x-celigo-ui-override": "Required by the AI agent configuration form. Encoded here to mirror the form so builders produce connectable configurations.",
+                      "x-celigo-ai-guidance": [
+                        "With platform-managed credentials (no `_connectionId` on the parent\nimport), the model must be one the platform hosts for the provider \u2014\nGemini and Anthropic Claude both have a hosted list. The save does not\ncheck this \u2014 an unlisted model saves, and the guardrail's first run fails\nwith 422 `invalid_model`, whose message lists the hosted models."
+                      ]
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "Sampling temperature",
+                      "x-celigo-ai-guidance": [
+                        "When `provider` is \"anthropic\", the value must be between 0 and 1 \u2014 a higher value\nfails the save with 422 `invalid_field_value`. Gemini accepts the full 0-2 range."
+                      ]
+                    },
+                    "maxCompletionTokens": {
+                      "type": "number",
+                      "minimum": 100,
+                      "maximum": 128000,
+                      "description": "Maximum number of tokens in the response"
+                    },
+                    "topP": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 1,
+                      "description": "Nucleus sampling parameter"
+                    },
+                    "seed": {
+                      "type": "number",
+                      "description": "Random seed for reproducible outputs"
+                    },
+                    "responseFormat": {
+                      "type": "object",
+                      "description": "Output format configuration",
+                      "x-celigo-ai-guidance": [
+                        "When `provider` is \"anthropic\", `type` must be \"text\" or \"json_schema\" \u2014 \"blob\" is\nrejected with 422 `invalid_response_format`. As with the other providers, \"json_schema\"\nrequires `name` and `jsonSchema`."
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "description": "Output format type.",
+                          "enum": ["text", "json_schema", "blob"],
+                          "x-enumDescriptions": {
+                            "text": "Free-form text response from the model.",
+                            "json_schema": "Structured JSON output conforming to a defined schema.",
+                            "blob": "Binary data output for non-text content."
+                          }
+                        },
+                        "schemaMode": {
+                          "type": "string",
+                          "enum": ["manual", "json"],
+                          "x-enumDescriptions": {
+                            "manual": "The schema was built field-by-field in the visual editor.",
+                            "json": "The schema was pasted or edited as raw JSON."
+                          },
+                          "description": "How the structured-output schema was authored in the UI. Editor\nstate only \u2014 it does not change how `jsonSchema` is sent to the\nprovider."
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Name for the output format (used with json_schema).",
+                          "x-celigo-ui-override": "Required by the AI agent form when output format type is json_schema. Encoded here to mirror the form so builders produce connectable configurations."
+                        },
+                        "strict": {
+                          "type": "boolean",
+                          "description": "When true, enforces strict schema validation on output."
+                        },
+                        "jsonSchema": {
+                          "type": "object",
+                          "description": "JSON Schema for structured output. Required when `responseFormat.type` is \"json_schema\".",
+                          "x-celigo-ui-override": "Required by the AI agent form when output format type is json_schema. Encoded here to mirror the form so builders produce connectable configurations.",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "description": "Root JSON Schema type of the structured output; use \"object\" for record-shaped results.",
+                              "enum": [
+                                "object",
+                                "array",
+                                "string",
+                                "number",
+                                "integer",
+                                "boolean"
+                              ],
+                              "x-enumDescriptions": {
+                                "object": "JSON object with named properties.",
+                                "array": "Ordered list of values.",
+                                "string": "Text string value.",
+                                "number": "Numeric value including decimals.",
+                                "integer": "Whole number value without decimals.",
+                                "boolean": "True or false value."
+                              }
+                            },
+                            "properties": {
+                              "type": "object",
+                              "additionalProperties": true,
+                              "description": "JSON Schema definitions for each field the structured output may contain."
+                            },
+                            "required": {
+                              "type": "array",
+                              "description": "Property names the model must include in the structured output.",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": {
+                              "type": "boolean",
+                              "description": "When true, the structured output may include properties beyond those defined in `properties`."
+                            }
+                          }
+                        }
+                      },
+                      "if": {
+                        "properties": {
+                          "type": {
+                            "const": "json_schema"
+                          }
+                        },
+                        "required": ["type"]
+                      },
+                      "then": {
+                        "required": ["name", "jsonSchema"]
+                      }
+                    },
+                    "_overrides": {
+                      "type": "object",
+                      "description": "Provider-specific overrides",
+                      "properties": {
+                        "gemini": {
+                          "type": "object",
+                          "description": "Gemini-specific configuration overrides.\n",
+                          "required": ["systemInstruction"],
+                          "properties": {
+                            "systemInstruction": {
+                              "type": "string",
+                              "maxLength": 1000000,
+                              "description": "System instruction for Gemini models. Equivalent to OpenAI's `instructions`.\nMaximum 1,000,000 characters.\n",
+                              "x-celigo-ui-override": "Required by the AI agent configuration form (the model's system prompt, the Gemini equivalent of `instructions`). Encoded here to mirror the form so builders produce connectable configurations."
+                            },
+                            "tools": {
+                              "type": "array",
+                              "deprecated": true,
+                              "description": "Not available on guardrails: a non-empty array fails the save with 422\n`guardrail_tools_not_allowed`.",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            },
+                            "prompts": {
+                              "type": "array",
+                              "description": "MCP prompt entries available to the Gemini model. Each item references one\nMCP connection and the prompt names allowed from it.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": ["mcp"],
+                                    "x-enumDescriptions": {
+                                      "mcp": "Connect to an MCP server to use its exposed prompts."
+                                    },
+                                    "description": "Type of prompt entry. Always \"mcp\"."
+                                  },
+                                  "mcp": {
+                                    "type": "object",
+                                    "description": "MCP server prompt configuration.",
+                                    "properties": {
+                                      "_mcpConnectionId": {
+                                        "type": "string",
+                                        "format": "objectId",
+                                        "x-celigo-refModel": "connections",
+                                        "description": "Connection to the MCP server."
+                                      },
+                                      "allowedPrompts": {
+                                        "type": "array",
+                                        "description": "Prompt names to allow from the MCP server.",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "resources": {
+                              "_circularRef": "../../../import/components/schemas/aiagent.yml#/McpResources"
+                            },
+                            "responseModalities": {
+                              "type": "array",
+                              "description": "Response output modalities",
+                              "x-celigo-ai-guidance": [
+                                "`[\"image\"]` requires an image-capable Gemini model (currently `gemini-2.5-flash-image`).\nSelecting it on a text-only model is rejected by the provider \u2014 pair image\noutput with the right model or omit."
+                              ],
+                              "items": {
+                                "type": "string",
+                                "enum": ["text", "image"],
+                                "x-enumDescriptions": {
+                                  "text": "Generate text content in the response.",
+                                  "image": "Generate image content in the response."
+                                }
+                              }
+                            },
+                            "topK": {
+                              "type": "number",
+                              "description": "Top-K sampling parameter for Gemini"
+                            },
+                            "thinkingConfig": {
+                              "type": "object",
+                              "description": "Controls Gemini's extended thinking capabilities",
+                              "x-celigo-ai-guidance": [
+                                "Supported on reasoning-capable Gemini models only (currently `gemini-2.5-pro`\nand `gemini-2.5-flash`).\nSetting `thinkingConfig` on a non-thinking model (e.g.\n`gemini-2.5-flash-lite`,\n`gemini-2.5-flash-image`) is rejected by the provider at runtime \u2014 omit the\nfield on those models."
+                              ],
+                              "properties": {
+                                "includeThoughts": {
+                                  "type": "boolean",
+                                  "description": "When true, includes the model's thinking steps in the response.",
+                                  "x-celigo-ai-guidance": [
+                                    "Whether to include thinking steps in the response"
+                                  ]
+                                },
+                                "thinkingBudget": {
+                                  "type": "number",
+                                  "minimum": 100,
+                                  "maximum": 4000,
+                                  "description": "Maximum tokens allocated for thinking"
+                                },
+                                "thinkingLevel": {
+                                  "type": "string",
+                                  "description": "Controls how much thinking effort the model applies; use higher levels for complex, multi-step tasks at the cost of latency and tokens.",
+                                  "enum": ["minimal", "low", "medium", "high"],
+                                  "x-enumDescriptions": {
+                                    "minimal": "Least thinking effort for simple tasks.",
+                                    "low": "Light thinking for moderately simple tasks.",
+                                    "medium": "Balanced thinking effort for typical tasks.",
+                                    "high": "Maximum thinking effort for complex, multi-step tasks."
+                                  }
+                                }
+                              }
+                            },
+                            "imageConfig": {
+                              "type": "object",
+                              "description": "Gemini image generation configuration",
+                              "properties": {
+                                "aspectRatio": {
+                                  "type": "string",
+                                  "description": "Aspect ratio of generated images; choose a ratio matching the intended display format.",
+                                  "enum": [
+                                    "1:1",
+                                    "2:3",
+                                    "3:2",
+                                    "3:4",
+                                    "4:3",
+                                    "4:5",
+                                    "5:4",
+                                    "9:16",
+                                    "16:9",
+                                    "21:9"
+                                  ],
+                                  "x-enumDescriptions": {
+                                    "1:1": "Square aspect ratio.",
+                                    "2:3": "Portrait aspect ratio (2 wide by 3 tall).",
+                                    "3:2": "Landscape aspect ratio (3 wide by 2 tall).",
+                                    "3:4": "Portrait aspect ratio (3 wide by 4 tall).",
+                                    "4:3": "Standard landscape aspect ratio (4 wide by 3 tall).",
+                                    "4:5": "Portrait aspect ratio (4 wide by 5 tall).",
+                                    "5:4": "Landscape aspect ratio (5 wide by 4 tall).",
+                                    "9:16": "Tall portrait aspect ratio for mobile screens.",
+                                    "16:9": "Widescreen landscape aspect ratio.",
+                                    "21:9": "Ultra-widescreen cinematic aspect ratio."
+                                  }
+                                },
+                                "imageSize": {
+                                  "type": "string",
+                                  "description": "Output resolution of generated images; higher resolutions increase detail and file size.",
+                                  "enum": ["1K", "2K", "4K"],
+                                  "x-enumDescriptions": {
+                                    "1K": "Standard resolution output around 1024 pixels.",
+                                    "2K": "High resolution output around 2048 pixels.",
+                                    "4K": "Ultra-high resolution output around 4096 pixels."
+                                  }
+                                }
+                              }
+                            },
+                            "mediaResolution": {
+                              "type": "string",
+                              "enum": ["low", "medium", "high"],
+                              "x-enumDescriptions": {
+                                "low": "Low resolution for faster processing and reduced token usage.",
+                                "medium": "Balanced resolution for typical media processing.",
+                                "high": "High resolution for maximum detail in media inputs."
+                              },
+                              "description": "Resolution for media inputs (images, video)"
+                            }
+                          }
+                        },
+                        "anthropic": {
+                          "type": "object",
+                          "description": "Claude-specific configuration overrides. Used when `provider` is \"anthropic\".\n",
+                          "required": ["systemInstruction"],
+                          "properties": {
+                            "systemInstruction": {
+                              "type": "string",
+                              "maxLength": 1000000,
+                              "description": "System instruction for Claude models. Equivalent to OpenAI's `instructions`.\nMaximum 1,000,000 characters.\n",
+                              "x-celigo-ui-override": "Required by the AI agent configuration form (the model's system prompt, the Claude equivalent of `instructions`). Encoded here to mirror the form so builders produce connectable configurations."
+                            },
+                            "topK": {
+                              "type": "number",
+                              "minimum": 0,
+                              "description": "Top-K sampling parameter. Deprecated on Claude models released after Claude Opus\n4.6, which reject any value at runtime; set it only on older models."
+                            },
+                            "thinkingConfig": {
+                              "type": "object",
+                              "description": "Controls Claude's extended thinking capabilities.",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": ["enabled", "disabled", "adaptive"],
+                                  "x-enumDescriptions": {
+                                    "enabled": "Turn on extended thinking with an explicit token budget.",
+                                    "disabled": "Turn off extended thinking.",
+                                    "adaptive": "Let the model decide how much to think based on task complexity."
+                                  },
+                                  "description": "Extended thinking mode."
+                                },
+                                "budgetTokens": {
+                                  "type": "number",
+                                  "minimum": 1024,
+                                  "description": "Maximum tokens allocated for thinking. Required when `type` is \"enabled\" \u2014\nomitting it fails the save with 422 `invalid_thinking_config`.",
+                                  "x-celigo-ui-override": "Required by the AI agent form when thinkingConfig.type is \"enabled\". Encoded here to mirror the form so builders produce connectable configurations."
+                                },
+                                "display": {
+                                  "type": "string",
+                                  "enum": ["summarized", "omitted"],
+                                  "x-enumDescriptions": {
+                                    "summarized": "Include a summarized view of the model's thinking in the response.",
+                                    "omitted": "Exclude the model's thinking from the response."
+                                  },
+                                  "description": "How thinking output is surfaced in the response."
+                                },
+                                "effort": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "xhigh",
+                                    "max"
+                                  ],
+                                  "x-enumDescriptions": {
+                                    "low": "Light thinking effort for moderately simple tasks.",
+                                    "medium": "Balanced thinking effort for typical tasks.",
+                                    "high": "Maximum standard thinking effort for complex tasks.",
+                                    "xhigh": "Extended thinking effort beyond high for demanding tasks.",
+                                    "max": "Highest available thinking effort."
+                                  },
+                                  "description": "How much thinking effort the model applies; use with `type` \"adaptive\". Higher\nvalues (`xhigh`, `max`) may be gated to specific Claude models by the provider."
+                                }
+                              },
+                              "if": {
+                                "properties": {
+                                  "type": {
+                                    "const": "enabled"
+                                  }
+                                },
+                                "required": ["type"]
+                              },
+                              "then": {
+                                "required": ["budgetTokens"]
+                              }
+                            },
+                            "serviceTier": {
+                              "type": "string",
+                              "enum": ["auto", "standard_only"],
+                              "x-enumDescriptions": {
+                                "auto": "Let Anthropic select the appropriate service tier.",
+                                "standard_only": "Restrict processing to the standard service tier."
+                              },
+                              "description": "Anthropic service tier for the request."
+                            },
+                            "tools": {
+                              "type": "array",
+                              "deprecated": true,
+                              "description": "Not available on guardrails: a non-empty array fails the save with 422\n`guardrail_tools_not_allowed`.",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            },
+                            "prompts": {
+                              "type": "array",
+                              "description": "MCP prompt entries available to the Claude model. Each item references one\nMCP connection and the prompt names allowed from it.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": ["mcp"],
+                                    "x-enumDescriptions": {
+                                      "mcp": "Connect to an MCP server to use its exposed prompts."
+                                    },
+                                    "description": "Type of prompt entry. Always \"mcp\"."
+                                  },
+                                  "mcp": {
+                                    "type": "object",
+                                    "description": "MCP server prompt configuration.",
+                                    "properties": {
+                                      "_mcpConnectionId": {
+                                        "type": "string",
+                                        "format": "objectId",
+                                        "x-celigo-refModel": "connections",
+                                        "description": "Connection to the MCP server."
+                                      },
+                                      "allowedPrompts": {
+                                        "type": "array",
+                                        "description": "Prompt names to allow from the MCP server.",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "resources": {
+                              "_circularRef": "../../../import/components/schemas/aiagent.yml#/McpResources"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "provider": {
+                    "const": "openai"
+                  }
+                },
+                "required": ["provider"]
+              },
+              "then": {
+                "required": ["openai"],
+                "properties": {
+                  "openai": {
+                    "required": ["model", "instructions"]
+                  }
+                }
+              },
+              "else": {
+                "if": {
+                  "properties": {
+                    "provider": {
+                      "enum": ["gemini", "anthropic"]
+                    }
+                  },
+                  "required": ["provider"]
+                },
+                "then": {
+                  "required": ["litellm"],
+                  "properties": {
+                    "litellm": {
+                      "required": ["model"]
+                    }
+                  }
+                },
+                "else": {
+                  "if": {
+                    "properties": {
+                      "provider": {
+                        "enum": [
+                          "mistral",
+                          "xai",
+                          "huggingface",
+                          "deepseek",
+                          "cohere",
+                          "groq"
+                        ]
+                      }
+                    },
+                    "required": ["provider"]
+                  },
+                  "then": {
+                    "required": ["model"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "Do not require mapping (or fields/lists inside it) \u2014 universal Mongo presence is a storage artifact; the API omits the empty stub on reads (probed).",
+        "method": "live-probe",
+        "verified": "2026-07-04"
+      },
+      "description": "Mapper 1.0 mapping that selects the guardrail's input from the\nincoming record. The UI writes a single field entry that maps a\nrecord field to the `text` input (e.g.\n`{\"fields\": [{\"extract\": \"employeeSummary\", \"generate\": \"text\"}]}`).\nOptional \u2014 when omitted the whole record is evaluated. The server\nserves this field only when populated.",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "description": "Field-level mapping entries; `generate` targets the guardrail input (typically `text`).",
+          "items": {
+            "type": "object",
+            "description": "One Mapper 1.0 field-mapping entry.",
+            "properties": {
+              "generate": {
+                "type": "string",
+                "description": "Target field path to write on the destination record.",
+                "examples": ["billingAddress.city"],
+                "x-celigo-ai-guidance": [
+                  "Destination field path on the target record. Use the target\nsystem's raw field id \u2014 for Salesforce the API name (e.g.\n``AccountId``, ``CustomField__c``); for HTTP/REST the JSON\nkey the endpoint expects; for NetSuite the internal field id\n(lowercase, no spaces).\n\nMapper 1.0 expands two notations into the destination\nstructure at write time:\n\n- **Dot notation** \u2014 ``customer.email`` builds nested\n  objects, writing ``{customer: {email: value}}``. Use it\n  freely for any depth of nested object on adaptors whose\n  payloads are JSON (HTTP, REST, Shopify-style, etc.).\n  NetSuite body fields are flat \u2014 do not use dot notation\n  there.\n- **Bracket-star notation** \u2014 ``addresses[*].company`` is the\n  idiomatic V1 expression for \"this scalar belongs to every\n  element of the destination array as it is being\n  constructed.\" Two or more ``[*]``-suffixed fields with the\n  same array prefix collaborate to populate a single element\n  per source record, e.g. pairing\n  ``customer.addresses[*].company`` with\n  ``customer.addresses[*].city`` produces one address object\n  carrying both fields.\n- **Numeric bracket notation** \u2014 ``addresses[0].company``\n  writes to a specific index. It works, but hardcodes the\n  slot and is only appropriate when the destination genuinely\n  targets a fixed position (rare). Prefer ``[*]`` whenever\n  the user describes \"an address\" / \"a line\" / \"an entry\";\n  reserve ``[N]`` for \"the second address\" and similar\n  explicit-index intents.\n\ncustomer.email                  \u2192 {\"customer\": {\"email\": ...}}\n  customer.addresses[*].company   \u2192 {\"customer\": {\"addresses\": [{\"company\": ...}]}}\n  customer.addresses[*].city      \u2191 adds \"city\" to the same address element"
+                ]
+              },
+              "extract": {
+                "type": "string",
+                "description": "Source expression. Accepts:\n- JSONPath starting with `$.` (e.g. `$.customer.firstName`).\n- Handlebars template (contains `{{`) for concatenation /\n  formatting / conditional logic (e.g.\n  `{{record.firstName}} {{record.lastName}}`).\n- A literal string (any value not starting with `$.` and not\n  containing `{{`) \u2014 treated as a hardcoded value.\n\nOmit when using `hardCodedValue`.\n",
+                "examples": ["address.city"]
+              },
+              "hardCodedValue": {
+                "type": ["string", "null"],
+                "description": "Static value written to `generate` instead of extracting from the source record.",
+                "x-celigo-ai-guidance": [
+                  "Static value written verbatim. Equivalent to setting ``extract``\nto a literal string; choose whichever reads more clearly. Mutually\nexclusive with ``extract``."
+                ]
+              },
+              "dataType": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "numberarray",
+                  "stringarray",
+                  "json"
+                ],
+                "x-lowercase": true,
+                "x-enumDescriptions": {
+                  "string": "Text string data type.",
+                  "number": "Numeric data type including integers and decimals.",
+                  "boolean": "True or false data type.",
+                  "numberarray": "Array of numeric values.",
+                  "stringarray": "Array of text string values.",
+                  "json": "Arbitrary JSON object or structure."
+                },
+                "description": "Data type coercion applied to the mapped value."
+              },
+              "discardIfEmpty": {
+                "type": "boolean",
+                "description": "When true, the field is omitted from the output when the extracted value is empty.",
+                "x-celigo-ai-guidance": [
+                  "When true, skip this field entirely when ``extract`` / lookup\nproduces empty / null. Without this flag the destination field\nreceives null and may overwrite existing data."
+                ]
+              },
+              "immutable": {
+                "type": "boolean",
+                "description": "When true, the mapped value cannot be overwritten by later mapping steps."
+              },
+              "lookupName": {
+                "type": "string",
+                "description": "Name of an entry in the import's `lookups` array used to translate the value.",
+                "x-celigo-ai-guidance": [
+                  "Name of a lookup defined on ``resource.lookups`` whose result\nreplaces the extracted value. The looked-up record's\n``resultField`` (or full record, depending on lookup shape)\nbecomes the mapped value."
+                ]
+              },
+              "default": {
+                "type": ["string", "null"],
+                "description": "Fallback value used when the extract yields no value."
+              },
+              "extractDateFormat": {
+                "type": "string",
+                "description": "Date format of the source value, used to parse it before conversion.",
+                "x-celigo-ai-guidance": [
+                  "Moment.js-style format describing how the source date string is\nstructured (e.g. ``MM/DD/YYYY``, ``YYYY-MM-DDTHH:mm:ssZ``)."
+                ]
+              },
+              "extractDateTimezone": {
+                "type": "string",
+                "description": "Timezone applied when parsing the source date value.",
+                "x-celigo-ai-guidance": [
+                  "IANA timezone of the source value (e.g. ``America/New_York``).\nSet together with ``generateDateTimezone`` only when a real\ntimezone conversion is required."
+                ]
+              },
+              "generateDateFormat": {
+                "type": "string",
+                "description": "Date format applied to the value written to the destination."
+              },
+              "generateDateTimezone": {
+                "type": "string",
+                "description": "Timezone applied when formatting the destination date value."
+              },
+              "conditional": {
+                "type": "object",
+                "description": "Only apply this mapping entry when the given condition is satisfied.\n",
+                "properties": {
+                  "when": {
+                    "type": "string",
+                    "enum": [
+                      "record_created",
+                      "record_updated",
+                      "extract_not_empty",
+                      "lookup_not_empty",
+                      "lookup_empty",
+                      "expression"
+                    ],
+                    "x-enumDescriptions": {
+                      "record_created": "Apply only when creating a new record.",
+                      "record_updated": "Apply only when updating an existing record.",
+                      "extract_not_empty": "Apply only when `extract` produces a non-empty value.",
+                      "lookup_not_empty": "Apply only when the paired lookup returns a value.",
+                      "lookup_empty": "Apply only when the paired lookup returns no value.",
+                      "expression": "Apply only when the accompanying `expression` evaluates truthy."
+                    },
+                    "description": "Condition that gates whether this mapping entry is applied.\n`lookup_not_empty` / `lookup_empty` evaluate the lookup named by the\nsibling `lookupName`; `expression` evaluates the sibling `expression`.\n"
+                  },
+                  "lookupName": {
+                    "type": "string",
+                    "description": "Lookup to evaluate for the `lookup_not_empty` / `lookup_empty`\nconditions.\n"
+                  },
+                  "expression": {
+                    "type": "string",
+                    "description": "Expression evaluated when `when` is `expression`.\n"
+                  }
+                }
+              }
+            },
+            "x-celigo-ai-guidance": [
+              "One Mapper 1.0 body field assignment. Exactly one of ``extract`` or\n``hardCodedValue`` should carry the value; setting both is\nrejected by the mapper processor."
+            ]
+          }
+        },
+        "lists": {
+          "type": "array",
+          "description": "List-level mappings, each generating a sublist. Rarely used on guardrails.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "generate": {
+                "type": "string",
+                "description": "Target sublist or array path to generate."
+              },
+              "fields": {
+                "type": "array",
+                "description": "Field mappings applied within each generated list item.",
+                "items": {
+                  "_circularRef": "../../../import/components/schemas/base.yml#/MappingField"
+                }
+              }
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "fields": [
+            {
+              "extract": "employeeSummary",
+              "generate": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "inputContext": {
+      "type": "string",
+      "enum": ["record", "envelope"],
+      "x-enumDescriptions": {
+        "record": "The guardrail receives each record directly (default behavior).",
+        "envelope": "The guardrail receives records wrapped in an envelope with metadata."
+      },
+      "description": "Controls the shape of the input passed to the guardrail's\nprocessing pipeline, exactly as on other imports. The UI writes\n`record` explicitly on new guardrails; when the field is absent\nthe platform behaves as `record`.",
+      "examples": ["record"]
+    }
+  },
+  "required": ["name", "adaptorType", "guardrail"],
+  "x-celigo-canon": {
+    "decision": "stricter-than-server",
+    "reason": "The required trio is documented form-mirroring canon (see the x-celigo-ui-override annotations) \u2014 kept so builders produce connectable guardrails; the API itself is more lenient.",
+    "method": "documented-contract",
+    "verified": "2026-07-04"
+  }
+}

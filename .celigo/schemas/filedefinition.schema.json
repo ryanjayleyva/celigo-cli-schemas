@@ -1,0 +1,264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo filedefinition",
+  "type": "object",
+  "description": "Request schema for creating or updating a file definition.",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable name for the file definition.",
+      "examples": [
+        "Invoice EDI 810",
+        "Customer CSV Import",
+        "Fixed-Width Payment File"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 10240,
+      "description": "Optional detailed description of the file definition's purpose and format.",
+      "examples": [
+        "Defines the structure for parsing incoming EDI 810 invoice documents"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "enum": ["1", "2"],
+      "description": "Schema version of the file definition. Only incremented for breaking changes.",
+      "examples": ["1", "2"]
+    },
+    "format": {
+      "type": "string",
+      "description": "The file format this definition describes.",
+      "enum": ["delimited", "delimited/x12", "delimited/edifact", "fixed"]
+    },
+    "documentType": {
+      "type": "string",
+      "enum": ["997", "CONTRL"],
+      "description": "EDI document type for acknowledgement documents."
+    },
+    "globalId": {
+      "type": "string",
+      "description": "Global identifier mapping to a known EDI standard document definition. Required for EDI formats when the account has an EDI license enabled. Immutable after creation.",
+      "examples": ["3c7a8f2e-1234-5678-9abc-def012345678"]
+    },
+    "rules": {
+      "type": "array",
+      "description": "Ordered array of recursive parsing/generation Rule nodes describing the file's structure. Must not exceed 20KB serialized.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "A single node in the recursive rules tree.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Optional human-readable identifier for the node.",
+            "examples": ["ST", "ISA", "OrderHeader"]
+          },
+          "elements": {
+            "type": "array",
+            "description": "Field-level definitions extracted from this rule's row/segment.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Human-readable label or segment-element identifier.",
+                  "examples": [
+                    "Order ID",
+                    "Authorization Information Qualifier",
+                    "orderId"
+                  ]
+                },
+                "value": {
+                  "description": "Machine identifier, row-type matcher, or composite-element definition.",
+                  "oneOf": [
+                    {
+                      "title": "literal",
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "required": ["elements"],
+                      "properties": {
+                        "delimiter": {
+                          "type": "string",
+                          "examples": [":", ">", "="]
+                        },
+                        "elements": {
+                          "type": "array"
+                        }
+                      }
+                    }
+                  ],
+                  "examples": ["ISA01", "BEG03", "A", "HDR"]
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["string", "number", "decimal", "boolean"],
+                  "description": "Type coercion applied to the parsed value.",
+                  "examples": ["string", "number", "decimal", "boolean"]
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": false,
+                  "examples": [true, false]
+                },
+                "minLength": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "maxLength": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "referenceValue": {
+                  "type": "string",
+                  "description": "Handlebars template that resolves to the element's value at runtime, e.g. {{{ediProfile.isa01}}}.",
+                  "examples": [
+                    "{{{ediProfile.isa01}}}",
+                    "{{{ediProfile.tpInterchangeId}}}"
+                  ]
+                },
+                "enum": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "examples": [
+                    ["00", "06", "22"],
+                    ["PR", "RL", "SA", "ZZ"]
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                },
+                "tally": {
+                  "type": "boolean",
+                  "examples": [true]
+                },
+                "counter": {
+                  "type": "boolean",
+                  "examples": [true]
+                },
+                "startPosition": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "length": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "start": {
+                  "type": "integer"
+                },
+                "end": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "children": {
+            "type": "array",
+            "description": "Nested rules."
+          },
+          "closeRule": {
+            "description": "Trailer rule that closes the loop/envelope this rule opens."
+          },
+          "container": {
+            "type": "boolean",
+            "default": false,
+            "description": "Marks this rule as a pure loop wrapper. When true, maxOccurrence MUST be greater than 1.",
+            "examples": [true, false]
+          },
+          "maxOccurrence": {
+            "type": "integer",
+            "minimum": 1,
+            "examples": [1, 1000]
+          },
+          "required": {
+            "type": "boolean",
+            "examples": [true, false]
+          },
+          "skipRowSuffix": {
+            "type": "boolean",
+            "default": false
+          },
+          "relativeDataPath": {
+            "type": "string",
+            "examples": ["Items", "N1", "ST"]
+          },
+          "relationship": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "examples": [["C,06,07", "P,04,05"]]
+          }
+        }
+      }
+    },
+    "fixed": {
+      "type": "object",
+      "description": "Configuration specific to fixed-width format files.",
+      "properties": {
+        "rowSuffix": {
+          "type": "string"
+        },
+        "rowDelimiter": {
+          "type": "string"
+        },
+        "paddingChar": {
+          "type": "string"
+        }
+      }
+    },
+    "delimited": {
+      "type": "object",
+      "description": "Configuration specific to delimited format files (CSV, EDI, etc.).",
+      "properties": {
+        "rowSuffix": {
+          "type": "string"
+        },
+        "rowDelimiter": {
+          "type": "string"
+        },
+        "colDelimiter": {
+          "type": "string"
+        },
+        "compositeDelimiter": {
+          "type": "string"
+        }
+      }
+    },
+    "strict": {
+      "type": "boolean"
+    },
+    "skipEmptyEndColDelimiter": {
+      "type": "boolean"
+    },
+    "skipIntermittentEmptyLines": {
+      "type": "boolean"
+    },
+    "escapeReleaseChar": {
+      "type": "boolean"
+    },
+    "skipEDIValidation": {
+      "type": "boolean"
+    },
+    "skipEDIProfileValidation": {
+      "type": "boolean",
+      "default": false
+    },
+    "externalId": {
+      "type": "string",
+      "examples": ["ext-filedef-12345"]
+    }
+  },
+  "required": ["name", "version", "format", "rules"]
+}

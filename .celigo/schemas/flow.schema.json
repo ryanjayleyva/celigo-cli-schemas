@@ -1,0 +1,1446 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo flow",
+  "type": "object",
+  "description": "Fields for creating or updating a flow.\n\nUse `pageProcessors` for simple linear flows or `routers` for conditional branching \u2014 never\ninclude both. The `schedule` field uses Celigo's 6-field cron format (not standard 5-field).",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 150,
+      "description": "Display name for the flow.",
+      "examples": [
+        "Salesforce to NetSuite Customer Sync",
+        "Order Processing Flow"
+      ],
+      "x-celigo-canon": {
+        "decision": "stricter-than-server",
+        "reason": "Server requires a non-empty name on create and caps its length, but accepts an empty name on update; the spec requires a non-empty name on every write.",
+        "method": "live-probe",
+        "verified": "2026-07-05"
+      }
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 5120,
+      "description": "Free-text description of the flow's purpose.",
+      "examples": [
+        "Synchronizes customer records from Salesforce to NetSuite every 15 minutes"
+      ],
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "Universal presence in stored docs is a UI-written default \u2014 the server accepts a minimal name-only flow without adding it.",
+        "method": "live-probe",
+        "verified": "2026-07-03"
+      }
+    },
+    "_integrationId": {
+      "type": ["string", "null"],
+      "format": "objectId",
+      "x-celigo-refModel": "integrations",
+      "description": "Integration this flow belongs to. Omitting it (or sending `null`) on\ncreate no longer produces a standalone flow \u2014 the flow is auto-assigned\nto the account's \"Standalone flows\" integration (or the create fails\nwith `422 standalone_flows_not_supported` when that integration is\nmissing). A value that is not a well-formed ObjectId is rejected with\n`400 invalid_ref` rather than auto-assigned. Always set it explicitly.",
+      "examples": ["60a2c4e6f321d800129a1a3c"],
+      "x-celigo-ai-guidance": [
+        "To move the flow to a different integration, PUT with a changed _integrationId AND remove _flowGroupingId (flow groups are per-integration; a stale value is rejected with 422 flowgrouping_not_belong). The platform registers the flow's step connections in the target integration on save.",
+        "Send a real integration id: a malformed value fails with 400 `invalid_ref`\n(\"Please provide a valid _integrationId.\"), and a well-formed id that names\nno integration in the account fails with 422 `invalid_ref`."
+      ]
+    },
+    "schedule": {
+      "type": ["string", "null"],
+      "description": "Celigo 6-field cron expression: `? minute hour day-of-month month day-of-week`.\nExplicit minute/hour lists, ranges, wildcards, and step forms (`*/N`) are all valid.\nLeave empty for event-driven or webhook-triggered flows. Validated on every\nwrite, including while `disabled` is true, so a flow cannot be parked disabled\nwith a broken schedule: `422 invalid_value` when the expression cannot be parsed\ninto a schedule (for example all wildcards, `? * * ? * *`), `422\nschedule_not_supported` when its runs would be less than a minute apart \u2014 which\nis also what free text such as `every 5 minutes` produces.",
+      "x-celigo-ai-guidance": [
+        "Build `schedule` as a Celigo 6-field cron:\n`? minute hour day-of-month month day-of-week`.\nThe seconds field is always `?`; day-of-month is usually `?`, month `*`,\nand day-of-week `*` (or specific days, 0=Sun..6=Sat).",
+        "Disabling a flow does not bypass schedule validation: POST, PUT, and PATCH\nall reject free text or a sub-minute expression (`not a cron`, `* * * * * *`)\nwith 422 `schedule_not_supported`, and an expression that parses to no\nschedule (`? * * ? * *`) with 422 `invalid_value`. Fix or clear the schedule\ninstead of disabling the flow to get past the error.",
+        "Prefer explicit lists when AUTHORING a schedule \u2014 hourly or longer:\nminute `5` with an explicit hour list\n(`? 5 0,4,8,12,16,20 ? * *` = every 4 hours;\n`? 5 9 ? * 1,2,3,4,5` = weekdays 9 AM; `? 5 0 ? * *` = daily);\nsub-hourly: an explicit minute list with hour `*`\n(`? 0,15,30,45 * ? * *` = every 15 minutes). Lists match the UI's\nschedule builder and make fire times unambiguous \u2014 the scheduler can\noffset step expressions (the UI's sub-hourly presets fire at minutes\n10/25/40/55).",
+        "Wildcard/step/range forms (`? */5 * * * *`, `? 10-59/30 * * * *`) are\nvalid and the scheduler runs them \u2014 never claim an existing schedule's\nformat is invalid or the cause of missed runs, and never rewrite a\nworking schedule into a different format as a fix. A new scheduled\ninstance is not started while a previous run of the flow is still in\nprogress (boundaries skipped during a long run are by design); missed\nruns on an enabled, unchanged flow with nothing running are a\nplatform-scheduler issue to escalate, not a configuration problem."
+      ],
+      "examples": [
+        "? 5 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23 ? * *",
+        "? 5 0,4,8,12,16,20 ? * *",
+        "? 5 9 ? * 1,2,3,4,5",
+        "? 5 0 ? * *"
+      ]
+    },
+    "timezone": {
+      "type": ["string", "null"],
+      "description": "IANA timezone for the schedule (e.g. `America/New_York`). Defaults to UTC.",
+      "examples": ["America/New_York", "Europe/London", "Asia/Tokyo", "UTC"],
+      "x-celigo-canon": {
+        "decision": "no-enum",
+        "reason": "Open IANA timezone vocabulary \u2014 low observed cardinality is a population artifact, not a closed set.",
+        "method": "documented-contract",
+        "verified": "2026-07-03"
+      }
+    },
+    "disabled": {
+      "type": "boolean",
+      "description": "When true, scheduled executions are suspended and the flow cannot be triggered.\nRunning jobs are allowed to complete.",
+      "default": false,
+      "examples": [true, false]
+    },
+    "pageGenerators": {
+      "type": "array",
+      "description": "Data sources (exports) that produce pages of records for the flow. Mutually exclusive with\ntop-level `pageProcessors` when `routers` is used.",
+      "items": {
+        "type": "object",
+        "description": "A data source that produces pages of records for the flow. Page generators are the\nentry points of a flow; each references an export, can carry its own schedule, and\nmultiple generators can run in parallel when the flow enables it.",
+        "properties": {
+          "_exportId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "exports",
+            "description": "Export that retrieves data from the source system. The server rejects page\ngenerator entries without a valid export reference unless the entry is a\nplaceholder still being set up (`setupInProgress: true`).",
+            "examples": ["60a2c4e6f321d800129a1a3c"],
+            "x-celigo-ai-guidance": [
+              "The export defines:\n- Connection to the source system\n- Query or API configuration\n- Data retrieval method (standard, delta, webhook, etc.)\n- Pagination and filtering rules"
+            ]
+          },
+          "schedule": {
+            "type": "string",
+            "description": "Cron expression for this specific generator, overriding the flow's main schedule.\nWhen omitted, the generator inherits the flow's schedule.",
+            "examples": ["? 5 0,6,12,18 ? * *", "? 30 2 ? * *"],
+            "x-celigo-ai-guidance": [
+              "When specified:\n- Overrides the flow's main schedule for this generator\n- Allows different data sources to refresh at different intervals\n- Useful for sources with varying update frequencies"
+            ]
+          },
+          "skipRetries": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, failed records from this generator are not retried \u2014 errors are logged\nand the flow continues. When false (the default), failed records are retried per\nplatform policy.",
+            "examples": [true, false],
+            "x-celigo-ai-guidance": [
+              "When true:\n- Failed attempts are not retried\n- Errors are logged but flow may continue\n- Useful for non-critical or time-sensitive data"
+            ]
+          },
+          "setupInProgress": {
+            "type": "boolean",
+            "description": "When true, the generator's configuration is still being set up in the UI and the step is not yet runnable.",
+            "examples": [false]
+          },
+          "_keepDeltaBehindFlowId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "flows",
+            "description": "Coordinates delta timing so this generator's checkpoint stays behind the referenced\nflow, preventing child records from being processed before their parents.",
+            "examples": ["60a2c4e6f321d800129a1a3c"],
+            "x-celigo-ai-guidance": [
+              "When specified:\n- This generator's delta timestamp stays behind the referenced flow\n- Prevents processing child records before parent records\n- Maintains referential integrity across flows"
+            ]
+          },
+          "_keepDeltaBehindExportId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "exports",
+            "description": "Like `_keepDeltaBehindFlowId` but targets a specific export's delta timestamp.",
+            "examples": ["60a2c4e6f321d800129a1a3c"],
+            "x-celigo-ai-guidance": [
+              "More granular than _keepDeltaBehindFlowId:\n- Targets a specific export's delta timestamp\n- Provides precise control over data dependencies\n- Useful for complex multi-source synchronization"
+            ]
+          },
+          "__startDateHelper": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Server-managed scheduling bookkeeping written by the platform when a run\nstarts. Never send it: the API silently drops any client-supplied value."
+          }
+        },
+        "x-celigo-ai-guidance": [
+          "Page generators are the entry points of a flow that retrieve data from source systems.\nThey can be scheduled independently or inherit the flow's schedule, and multiple generators\ncan run in parallel if configured."
+        ],
+        "if": {
+          "properties": {
+            "setupInProgress": {
+              "const": true
+            }
+          },
+          "required": ["setupInProgress"]
+        },
+        "then": {},
+        "else": {
+          "required": ["_exportId"]
+        }
+      }
+    },
+    "pageProcessors": {
+      "type": "array",
+      "description": "Sequential processing steps (imports, lookups, routers). Mutually exclusive with `routers` \u2014\nuse one or the other, not both.",
+      "items": {
+        "type": "object",
+        "description": "A processing step that operates on pages of records within a flow. Processors are\neither lookups (`type: export`) that enrich records or imports (`type: import`) that\nwrite records to a destination, and execute sequentially unless routed into branches.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Selects whether this step runs a lookup export or an import, and which reference field applies.",
+            "enum": ["export", "import"],
+            "x-enumDescriptions": {
+              "export": "Uses an export resource (configured as a lookup) for data lookup or enrichment.",
+              "import": "Uses an import resource to send data to a destination system."
+            },
+            "examples": ["export", "import"]
+          },
+          "_exportId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "exports",
+            "description": "Lookup export that enriches incoming records. Required when `type` is `export`;\nthe referenced export must be configured as a lookup (`isLookup: true`).",
+            "examples": ["60a2c4e6f321d800129a1a3c"],
+            "x-celigo-ai-guidance": [
+              "Required when type=\"export\". The export must be configured as a lookup\n(isLookup=true) to receive and process incoming records.\n\nCommon uses:\n- Retrieve additional details from a system\n- Validate data against a reference source\n- Enrich records with related information"
+            ]
+          },
+          "_importId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "imports",
+            "description": "Import that writes records to the destination system. Required when `type` is `import`.",
+            "examples": ["60a2c4e6f321d800129a1a3c"],
+            "x-celigo-ai-guidance": [
+              "Required when type=\"import\". The import defines:\n- Target system connection\n- Data mapping and transformation\n- Error handling and validation rules\n- Create/update logic"
+            ]
+          },
+          "proceedOnFailure": {
+            "type": "boolean",
+            "description": "When true, records that fail in this processor continue to subsequent steps and the\nerror is logged. When false, failed records stop at this step.",
+            "examples": [true, false],
+            "x-celigo-ai-guidance": [
+              "When true:\n- Errors are logged but don't stop the flow\n- Subsequent processors continue execution\n- Failed records may be skipped"
+            ]
+          },
+          "responseMapping": {
+            "type": "object",
+            "description": "Merges fields from a step's response back onto the in-flight record so\ndownstream steps can read them. Applies to both lookup steps\n(`type: \"export\"`) and import steps (`type: \"import\"`); without it, the\nstep's response is discarded after the call.\n\n`fields` and `lists` are plain arrays \u2014 exactly the shape GET returns.\n\nExtract paths do NOT read the raw application response \u2014 the platform\nwraps every response in a canonical per-record envelope first, and\nextracts evaluate against that envelope:\n\n- **Lookup steps**: `{\"statusCode\": 200, \"data\": [<result records>],\n  \"errors\": []}` \u2014 `data` holds the records the lookup returned, so\n  extracts must start from it: `data[0].name` copies a field of the\n  first result, `data` copies the whole result array. A bare\n  result-record field name (e.g. `name`) resolves to nothing and merges\n  nothing.\n- **Import steps**: `{\"id\": \"<destination record id>\", \"statusCode\": 200,\n  \"ignored\": false, \"errors\": [], \"_json\": <raw destination response>}` \u2014\n  use `id` for the destination-assigned id and `_json.<path>` for fields\n  inside the destination's response body. The full envelope (including\n  `id`) is present on real runs and in flow-builder previews; flow TEST\n  runs never execute imports, and their mock-built envelope carries no\n  `id` \u2014 an `extract: \"id\"` merges nothing in a test run even though it\n  works on real runs.\n",
+            "x-celigo-ai-guidance": [
+              "Send `fields` and `lists` as bare arrays, exactly as GET returns them.\nNever wrap either in an object (e.g. `\"fields\": {\"type\": [...]}`): the\nAPI does not reject that shape \u2014 it returns 200 and silently persists\n`fields: [null]` / `lists: [{\"fields\": []}]`, erasing the step's\nresponse mappings.",
+              "responseMapping is fully replaced on PUT: omitting it resets the step\nto empty `{\"fields\": [], \"lists\": []}`. Always send the complete\nintended mapping for every step.",
+              "To carry several lookup results onto the record, use `extract: \"data\"`\n(the whole result array) or a `lists` entry whose extracts use\n`data[*].x` \u2014 never `data[*].x` in `fields[].extract`, which merges\nnothing: the record simply never gains the field."
+            ],
+            "examples": [
+              {
+                "fields": [
+                  {
+                    "extract": "id",
+                    "generate": "ContactId"
+                  }
+                ],
+                "lists": []
+              },
+              {
+                "fields": [
+                  {
+                    "extract": "data[0].customer.name",
+                    "generate": "customerName"
+                  }
+                ],
+                "lists": [
+                  {
+                    "generate": "matchedOrders",
+                    "fields": [
+                      {
+                        "extract": "data[*].id",
+                        "generate": "orderId"
+                      },
+                      {
+                        "extract": "data[*].total",
+                        "generate": "amount"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "properties": {
+              "fields": {
+                "type": "array",
+                "description": "Field mappings that copy individual values from the response\nenvelope onto the in-flight record.\n",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "extract": {
+                      "type": "string",
+                      "description": "Path within the canonical response envelope to copy the value\nfrom. For lookup steps, paths start from the envelope's `data`\narray (`data[0].x` and `data.0.x` are equivalent; `data` alone\ncopies every result); for import steps, use the envelope fields\n`id`, `statusCode`, `ignored`, or `_json.<path>` for the raw\nresponse body. Paths that skip the envelope (bare response\nfield names) resolve to nothing, and a `[*]` wildcard is not\nhonored here \u2014 `data[*].x` merges nothing; iterate arrays with\n`lists` instead.\n",
+                      "examples": [
+                        "data[0].customer.name",
+                        "data.0.fields.Product Name",
+                        "data",
+                        "id",
+                        "_json.orderNumber"
+                      ]
+                    },
+                    "generate": {
+                      "type": "string",
+                      "description": "Field path on the in-flight record where the extracted value\nis stored, using dot notation for nesting. Downstream steps\nread the value at this path.\n",
+                      "examples": [
+                        "customerName",
+                        "supplierDetails.supplierName",
+                        "netsuite_order_id"
+                      ]
+                    }
+                  }
+                }
+              },
+              "lists": {
+                "type": "array",
+                "description": "Array mappings that build a target array on the in-flight record\nfrom an array inside the response envelope \u2014 one output item per\nelement of the array the item extracts mark with `[*]` (`data[*].x`\nfor lookups, `_json.<arrayPath>[*].x` for imports); an empty source\narray yields an empty target array. Not needed for one-to-many\n(fan-out) merge-back, which uses plain field mappings.\n",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "generate": {
+                      "type": "string",
+                      "description": "Array field created on the in-flight record to hold the\nmapped items.\n",
+                      "examples": ["orderItems", "addresses", "contacts"]
+                    },
+                    "fields": {
+                      "type": "array",
+                      "description": "Field mappings applied to each item of the source array to\nproduce the corresponding target-array item.\n",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "extract": {
+                            "type": "string",
+                            "description": "Full envelope path to the source value, with `[*]`\nmarking the array to iterate \u2014 `data[*].productId` for a\nlookup, `_json.items[*].sku` for an import. A path without\n`[*]` (e.g. `statusCode`) repeats the same envelope value\non every item; an item-relative name (`productId`)\nresolves to nothing and produces empty objects.\n",
+                            "examples": [
+                              "data[*].productId",
+                              "data[*].quantity",
+                              "_json.items[*].sku"
+                            ]
+                          },
+                          "generate": {
+                            "type": "string",
+                            "description": "Target field within each mapped array item.",
+                            "examples": ["itemId", "qty", "unitPrice"]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "hooks": {
+            "type": "object",
+            "description": "Custom code hooks extending this processor's behavior.",
+            "properties": {
+              "postResponseMap": {
+                "type": "object",
+                "description": "Hook that runs after the step's response mapping completes.",
+                "properties": {
+                  "function": {
+                    "type": "string",
+                    "description": "Function to invoke within the referenced script.",
+                    "examples": ["enrichResponseData"]
+                  },
+                  "_scriptId": {
+                    "type": "string",
+                    "format": "objectId",
+                    "x-celigo-refModel": "scripts",
+                    "description": "Script containing the hook function named in `function`.",
+                    "examples": ["60a2c4e6f321d800129a1a3c"]
+                  }
+                }
+              }
+            }
+          },
+          "setupInProgress": {
+            "type": "boolean",
+            "description": "When true, the processor's configuration is still being set up in the UI and the step is not yet runnable."
+          }
+        },
+        "if": {
+          "properties": {
+            "setupInProgress": {
+              "const": true
+            }
+          },
+          "required": ["setupInProgress"]
+        },
+        "then": {},
+        "else": {
+          "required": ["type"],
+          "if": {
+            "properties": {
+              "type": {
+                "const": "export"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["_exportId"]
+          },
+          "else": {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "import"
+                }
+              },
+              "required": ["type"]
+            },
+            "then": {
+              "required": ["_importId"]
+            }
+          }
+        },
+        "x-celigo-ai-guidance": [
+          "Page processors can be exports (for lookups), imports (for data loading), or references\nto routers for conditional processing. They execute sequentially unless part of a router branch."
+        ]
+      }
+    },
+    "routers": {
+      "type": "array",
+      "description": "Routing configurations that direct records to conditional branches. Mutually exclusive with\ntop-level `pageProcessors` \u2014 use one or the other, not both.",
+      "items": {
+        "type": "object",
+        "description": "Configuration for conditional routing that directs records to different processing branches.\n\nRouters evaluate each record against defined criteria and route them to appropriate branches\nfor specialized processing. This enables complex business logic and conditional workflows.\n",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for this router within the flow.\n\nUsed to reference this router from branches (`branches[].nextRouterId`)\nwhen chaining routers. Must be unique within the flow's router collection.\n",
+            "examples": ["router_001", "customer_type_router"]
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name for the router.\n\nDisplayed in the UI and logs to help identify the router's purpose.\n",
+            "examples": ["Customer Type Router", "Order Status Router"]
+          },
+          "routeRecordsTo": {
+            "type": "string",
+            "description": "Strategy for routing records to branches.",
+            "enum": ["first_matching_branch", "all_matching_branches"],
+            "x-enumDescriptions": {
+              "first_matching_branch": "Routes each record to only the first branch whose criteria match.",
+              "all_matching_branches": "Routes each record to every branch whose criteria match, creating copies."
+            },
+            "default": "first_matching_branch",
+            "examples": ["first_matching_branch"]
+          },
+          "routeRecordsUsing": {
+            "type": "string",
+            "description": "Method used to evaluate routing criteria.",
+            "enum": ["input_filters", "script"],
+            "x-enumDescriptions": {
+              "input_filters": "Evaluate routing criteria using declarative filter expressions.",
+              "script": "Evaluate routing criteria using a custom JavaScript function."
+            },
+            "default": "input_filters",
+            "examples": ["input_filters"]
+          },
+          "script": {
+            "type": "object",
+            "description": "Script configuration when routeRecordsUsing=\"script\".\n\nEnables custom routing logic that can't be expressed with filters.\n",
+            "properties": {
+              "_scriptId": {
+                "type": "string",
+                "format": "objectId",
+                "x-celigo-refModel": "scripts",
+                "description": "Reference to the script resource",
+                "examples": ["60a2c4e6f321d800129a1a3c"]
+              },
+              "function": {
+                "type": "string",
+                "description": "Function name that returns the branch name for each record",
+                "examples": ["routeByCustomerType", "calculateBranch"]
+              }
+            }
+          },
+          "branches": {
+            "type": "array",
+            "description": "List of branches that define different processing paths.\n\nEach branch has its own criteria and processing steps. Records are evaluated\nagainst branch criteria in the order defined.\n",
+            "items": {
+              "type": "object",
+              "description": "Configuration for a single branch within a router that defines criteria and processing steps.\n\nEach branch represents a conditional path that records can take based on matching criteria.\nBranches are evaluated in order, and records are routed based on the router's strategy.\n",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Unique name for this branch within the router.\n\nUsed for:\n- Identification in logs and monitoring\n- Reference in custom routing scripts\n- Display in the UI\n\nShould be descriptive of the branch's purpose or criteria.\n",
+                  "examples": [
+                    "enterprise_customers",
+                    "high_priority",
+                    "needs_approval"
+                  ]
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Optional description explaining the branch's purpose and criteria.\n\nHelps document:\n- What types of records this branch handles\n- Business logic or rules applied\n- Why this branch exists\n",
+                  "examples": [
+                    "Handles enterprise customers with annual revenue > $1M",
+                    "Routes orders requiring manual approval"
+                  ]
+                },
+                "inputFilter": {
+                  "type": "object",
+                  "description": "Filter criteria that determines which records match this branch.\n\nOnly used when the router's routeRecordsUsing=\"inputFilter\".\nRecords matching these criteria will be routed to this branch.\n",
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "description": "Version of the filter expression language",
+                      "examples": ["1.0", "2.0"]
+                    },
+                    "rules": {
+                      "type": "array",
+                      "description": "Filter expression array defining the matching criteria, in the platform's\nprefix-notation filter DSL: the first element is an operator name and the\nremaining elements are its operands, which may themselves be nested\nexpression arrays.\n\n```\n[operator, operand1, operand2, ...]\n```\n\nUses the same expression language as export/import filters\n(`Filter.expression.rules`): comparison operators (`equals`, `notequals`,\n`greaterthan`, `lessthan`, `startswith`, `contains`, `isempty`, `matches`, ...),\nlogical operators (`and`, `or`, `not`), field access (`extract`, `settings`)\nand type conversions (`string`, `number`, `boolean`, `epochtime`).\n\nExample \u2014 route records whose `isDeleted` field is the string \"false\":\n```json\n[\"equals\", [\"string\", [\"extract\", \"isDeleted\"]], \"false\"]\n```\n",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "title": "String",
+                            "type": "string"
+                          },
+                          {
+                            "title": "Number",
+                            "type": "number"
+                          },
+                          {
+                            "title": "Boolean",
+                            "type": "boolean"
+                          },
+                          {
+                            "title": "Null",
+                            "type": "null"
+                          },
+                          {
+                            "title": "Object",
+                            "type": "object"
+                          },
+                          {
+                            "title": "Array",
+                            "type": "array"
+                          }
+                        ]
+                      },
+                      "examples": [
+                        ["equals", ["string", ["extract", "source"]], "web"]
+                      ]
+                    }
+                  }
+                },
+                "pageProcessors": {
+                  "type": "array",
+                  "description": "List of processors that execute for records routed to this branch.\n\nThese processors:\n- Execute in sequence for records matching this branch\n- Can include exports, imports, or nested routers\n- Have the same structure as flow-level page processors\n- Continue until completion or error (unless proceedOnFailure is set)\n",
+                  "items": {
+                    "_circularRef": "./page-processor.yml#/PageProcessor"
+                  },
+                  "x-celigo-canon": {
+                    "decision": "not-required",
+                    "reason": "Server accepts a bare name-only branch and normalizes pageProcessors to an empty array \u2014 universal production presence is server-fill, not a client requirement.",
+                    "method": "live-probe",
+                    "verified": "2026-07-03"
+                  }
+                },
+                "nextRouterId": {
+                  "type": "string",
+                  "description": "Chains this branch to another router: after the branch's pageProcessors\ncomplete, records continue to the router whose `id` matches this value.\n\nEnables sequential routing decisions where records pass through multiple\nrouters for complex branching logic. The server validates the reference \u2014\na value that does not match any router `id` in the flow is rejected with\na 422 (\"Invalid nextRouterId is defined on the branch\").\n",
+                  "examples": ["router_002"]
+                },
+                "branchId": {
+                  "type": "string",
+                  "description": "Stable identifier for this branch, used to correlate branch-level state\n(for example dashboards and error reporting) across saves. Generated by\nthe server when omitted; a client-supplied value is kept as-is.\n",
+                  "examples": ["El8lWTezixy"]
+                }
+              },
+              "required": ["name"]
+            }
+          }
+        },
+        "required": ["id", "branches"]
+      }
+    },
+    "_exportId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "exports",
+      "description": "Source export of a simple (single source, single destination) flow \u2014 the legacy\npre-flow-builder model still produced by Data Loader flows. Paired with `_importId`\ninstead of `pageGenerators`/`pageProcessors`; the server accepts and serves both\nforms. Prefer `pageGenerators` for new flows.",
+      "examples": ["60a2c4e6f321d800129a1a3c"]
+    },
+    "_importId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "imports",
+      "description": "Destination import of a simple (single source, single destination) flow \u2014 the legacy\npre-flow-builder model still produced by Data Loader flows. Paired with `_exportId`\ninstead of `pageGenerators`/`pageProcessors`. Prefer `pageProcessors` for new flows.",
+      "examples": ["60a2c4e6f321d800129a1a3c"]
+    },
+    "_runNextFlowIds": {
+      "type": ["array", "null"],
+      "description": "Flow IDs to trigger after this flow completes successfully. Accepts null as\nequivalent to an empty list (the server also serves null on documents saved\nthat way).",
+      "items": {
+        "type": "string",
+        "format": "objectId",
+        "x-celigo-refModel": "flows"
+      },
+      "examples": [["5f8d43a1b9e5a80011a35f2d", "5f8d43a1b9e5a80011a35f2e"]],
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "Universal presence in stored docs is a UI-written default \u2014 the server accepts a minimal name-only flow without adding it.",
+        "method": "live-probe",
+        "verified": "2026-07-03"
+      }
+    },
+    "_runNextExportIds": {
+      "type": "array",
+      "description": "Specific exports in other flows to trigger after completion.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "_flowId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "flows",
+            "description": "Flow containing the export to trigger.",
+            "examples": ["5f8d43a1b9e5a80011a35f2d"]
+          },
+          "_exportId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "exports",
+            "description": "Export to execute.",
+            "examples": ["60a2c4e6f321d800129a1a3c"]
+          }
+        }
+      },
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "Universal presence in stored docs is a UI-written default \u2014 the server accepts a minimal name-only flow without adding it.",
+        "method": "live-probe",
+        "verified": "2026-07-03"
+      }
+    },
+    "externalId": {
+      "type": ["string", "null"],
+      "description": "External identifier for correlating the flow with a record in another system.",
+      "examples": ["CUST-SYNC-001"]
+    },
+    "wizardState": {
+      "type": "string",
+      "enum": ["step2", "step3", "done"],
+      "x-enumDescriptions": {
+        "step2": "The flow setup wizard is on its second step.",
+        "step3": "The flow setup wizard is on its third step.",
+        "done": "The flow setup wizard has been completed."
+      },
+      "description": "Tracks how far the user has progressed through the flow setup wizard in the UI.",
+      "examples": ["done"]
+    },
+    "settings": {
+      "type": "object",
+      "description": "Custom key-value settings for this flow. At runtime the flow's steps read them\nunder the fixed scope key `flow` \u2014 e.g. the Handlebars expression\n`{{settings.flow.batchSize}}`, the Mapper 2.0 envelope path\n`$.settings.flow.batchSize`, or `options.settings.flow` in script hooks.",
+      "additionalProperties": true,
+      "x-celigo-canon": {
+        "decision": "no-constraint",
+        "reason": "Freeform user/integrator payload \u2014 interiors deliberately unconstrained per the campaign rule; do not model keys.",
+        "method": "documented-contract",
+        "verified": "2026-07-03"
+      }
+    },
+    "runPageGeneratorsInParallel": {
+      "type": "boolean",
+      "description": "When true, all page generators start simultaneously instead of sequentially.",
+      "examples": [true, false]
+    },
+    "autoResolveMatchingTraceKeys": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, a new error for a record whose trace key already has open errors on the same step\nauto-resolves the older ones, a later success for that record auto-resolves its open errors,\nand errors classified `intermittent` are retried automatically \u2014 up to four attempts, the\nfirst about 30 minutes after the error.",
+      "examples": [true, false],
+      "x-celigo-ai-guidance": [
+        "Both behaviors hang off this one flag \u2014 off means repeated failures of a record stay open and intermittent errors get no automatic retries; never turn it off as a fix for \"duplicate\" errors (those come from the destination, not from trace keys).",
+        "Intermittent auto-retry does not depend on the trace key \u2014 errors with a blank trace key are scheduled and retried the same way; a blank key only loses the duplicate collapse."
+      ],
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "The server stamps true on every create that omits it (integration-scoped creates included), so a request never needs to send it \u2014 the stored value is a server default, not a UI artifact.",
+        "method": "live-probe",
+        "verified": "2026-09-10"
+      }
+    },
+    "isAbstract": {
+      "type": "boolean",
+      "description": "Marks this as an abstract (multi-instance) flow \u2014 a reusable template that cannot be\nexecuted directly. Instance flows reference it via `_abstractFlowId` and provide `overrides`.\n\nConstraints: top-level `pageProcessors` are not allowed (use `routers`), cannot reference\nanother abstract flow, cannot be a \"run next\" target, and cannot be unset while instances exist.",
+      "examples": [true, false]
+    },
+    "_abstractFlowId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "flows",
+      "description": "Abstract flow this instance inherits from. Immutable once set. The instance inherits\nthe flow graph and uses `overrides` to customize connections, schedules, and hooks.",
+      "x-celigo-ai-guidance": [
+        "When `_abstractFlowId` is set the flow is an instance:\ncustomize it only through `overrides`.\nDo not set `pageGenerators`, `pageProcessors`, `routers`,\nor `runPageGeneratorsInParallel` on the instance \u2014 they are inherited from the abstract flow."
+      ],
+      "examples": ["60a2c4e6f321d800129a1a3c"]
+    },
+    "overrides": {
+      "type": "object",
+      "description": "Configuration overrides for flows that inherit from abstract flows.\n\nWhen a flow inherits from an abstract flow template, this object allows selective\noverriding of inherited configuration while maintaining the base structure.\n",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Override for the flow's display name",
+          "examples": ["Production Customer Sync", "Test Environment Flow"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Override for the flow's description",
+          "examples": ["Production version of the customer sync template"]
+        },
+        "settings": {
+          "type": "object",
+          "description": "Override for custom flow settings.\n\nAllows modifying specific settings while inheriting others from\nthe abstract flow template.\n",
+          "additionalProperties": true,
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "Freeform user/integrator payload \u2014 interiors deliberately unconstrained per the campaign rule; do not model keys.",
+            "method": "documented-contract",
+            "verified": "2026-07-03"
+          }
+        },
+        "timezone": {
+          "type": "string",
+          "description": "Override for the flow's schedule timezone",
+          "examples": ["America/Chicago", "Europe/Paris"]
+        },
+        "_runNextFlowIds": {
+          "type": "array",
+          "description": "Override list of flows to trigger after completion",
+          "items": {
+            "type": "string"
+          }
+        },
+        "_runNextExportIds": {
+          "type": "array",
+          "description": "Override list of exports to trigger after completion",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_flowId": {
+                "type": "string",
+                "x-celigo-refModel": "flows",
+                "description": "The flow containing the export",
+                "examples": ["5f8d43a1b9e5a80011a35f2d"]
+              },
+              "_exportId": {
+                "type": "string",
+                "x-celigo-refModel": "exports",
+                "description": "The specific export to trigger",
+                "examples": ["60a2c4e6f321d800129a1a3c"]
+              }
+            }
+          }
+        },
+        "__listenerIdsToIndex": {
+          "type": "array",
+          "readOnly": true,
+          "description": "Server-managed listener index auto-populated by the platform on instance\nflows. Never send it as part of a request.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "connections": {
+          "type": "array",
+          "description": "Override connection configurations for abstract flow connections.\n\nMaps abstract connection placeholders to concrete connection instances.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the abstract connection being overridden",
+                "examples": ["abstract_salesforce_conn"]
+              },
+              "_id": {
+                "type": "string",
+                "x-celigo-refModel": "connections",
+                "description": "Concrete connection ID to use instead",
+                "examples": ["60a2c4e6f321d800129a1a3c"]
+              },
+              "_borrowConcurrencyFromConnectionId": {
+                "type": "string",
+                "x-celigo-refModel": "connections",
+                "description": "Optional connection to share concurrency limits with.\n\nUseful when multiple connections access the same system\nand need to share rate limiting.\n",
+                "examples": ["60a2c4e6f321d800129a1a3d"]
+              }
+            }
+          }
+        },
+        "exports": {
+          "type": "array",
+          "description": "Override configurations for exports in the abstract flow.\n\nAllows customizing export behavior while maintaining the flow structure.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the abstract export being overridden",
+                "examples": ["abstract_customer_export"]
+              },
+              "_id": {
+                "type": "string",
+                "x-celigo-refModel": "exports",
+                "description": "Concrete export ID to use (if replacing entirely)",
+                "examples": ["60a2c4e6f321d800129a1a3c"]
+              },
+              "_connectionId": {
+                "type": "string",
+                "x-celigo-refModel": "connections",
+                "description": "Override the connection used by this export",
+                "examples": ["60a2c4e6f321d800129a1a3c"]
+              },
+              "_keepDeltaBehindFlowId": {
+                "type": "string",
+                "x-celigo-refModel": "flows",
+                "description": "Override delta synchronization settings",
+                "examples": ["5f8d43a1b9e5a80011a35f2d"]
+              },
+              "_keepDeltaBehindExportId": {
+                "type": "string",
+                "x-celigo-refModel": "exports",
+                "description": "Override delta synchronization settings",
+                "examples": ["66a1f2c3b4d5e6f7a8b9c0d1"]
+              },
+              "schedule": {
+                "type": "string",
+                "description": "Replaces the page generator's schedule for this instance, in the same\nCeligo 6-field cron format as the flow-level `schedule`. Parsed on every\nwrite regardless of `disabled`; an unparseable expression fails with\n`422 invalid_value` at `overrides.exports[i].schedule`.",
+                "examples": ["? 5 0,4,8,12,16,20 ? * *"]
+              },
+              "skipRetries": {
+                "type": "boolean",
+                "description": "Override retry behavior"
+              },
+              "mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "Overrides the Mapper 2.0 field mappings on the abstract flow's export (lookup step), which reshape records the lookup returns."
+              },
+              "proceedOnFailure": {
+                "type": "boolean",
+                "description": "Override error handling behavior"
+              },
+              "responseMapping": {
+                "_circularRef": "./response-mapping.yml#/ResponseMapping"
+              },
+              "pageSize": {
+                "type": "integer",
+                "description": "Override page size for this export",
+                "examples": [100, 500]
+              },
+              "dataURITemplate": {
+                "type": "string",
+                "description": "Override URI template for error tracking"
+              },
+              "traceKeyTemplate": {
+                "type": "string",
+                "description": "Override trace key generation"
+              },
+              "pathToMany": {
+                "type": "string",
+                "description": "Override one-to-many path configuration"
+              },
+              "inputFilter": {
+                "type": "object",
+                "description": "Override input filtering rules",
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "description": "Version of the filter expression format used by the rules; currently only \"1\" is supported."
+                  },
+                  "rules": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Filter expression defining the matching criteria, in prefix notation \u2014 the operator first, followed by its operands, which may be nested expressions."
+                  }
+                }
+              },
+              "groupByFields": {
+                "type": "array",
+                "description": "Override grouping fields",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "test": {
+                "type": "object",
+                "description": "Override test mode settings",
+                "properties": {
+                  "limit": {
+                    "type": "integer",
+                    "description": "Overrides the test-mode record cap on the abstract flow's export \u2014 the total number of records a test run processes."
+                  }
+                }
+              },
+              "delta": {
+                "type": "object",
+                "description": "Override delta configuration",
+                "properties": {
+                  "dateField": {
+                    "type": "string",
+                    "description": "Overrides the delta date field on the abstract flow's export \u2014 the record timestamp field(s) compared against the last successful run time to identify changed records. Accepts a single field or multiple comma-separated fields."
+                  },
+                  "dateFormat": {
+                    "type": "string",
+                    "description": "Overrides the moment.js format string applied to the delta cutoff timestamp; ISO 8601 is used when unset."
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "description": "Overrides the fixed start timestamp used for the delta window on the abstract flow's export, in place of the last successful run time."
+                  },
+                  "lagOffset": {
+                    "type": "integer",
+                    "description": "Overrides the buffer in milliseconds subtracted from the last successful run timestamp, creating an overlapping window that catches late-propagating records."
+                  },
+                  "endDateField": {
+                    "type": "string",
+                    "description": "Overrides the record timestamp field used as the upper bound of the delta window on the abstract flow's export."
+                  }
+                }
+              },
+              "once": {
+                "type": "object",
+                "description": "Override once export settings",
+                "properties": {
+                  "booleanField": {
+                    "type": "string",
+                    "description": "Overrides the once-mode tracking field on the abstract flow's export \u2014 the boolean field in the source system that is false for unprocessed records and set to true after successful processing."
+                  }
+                }
+              },
+              "valueDelta": {
+                "type": "object",
+                "description": "Override value delta settings",
+                "properties": {
+                  "exportedField": {
+                    "type": "string",
+                    "description": "Overrides the field that tracks the last exported value on the abstract flow's export."
+                  },
+                  "pendingField": {
+                    "type": "string",
+                    "description": "Overrides the field that tracks the pending (not yet exported) value on the abstract flow's export."
+                  }
+                }
+              },
+              "webhook": {
+                "type": "object",
+                "description": "Override webhook configuration",
+                "properties": {
+                  "token_crypt": {
+                    "type": "string",
+                    "description": "Encrypted form of the webhook verification token, stored at rest."
+                  },
+                  "token_salt": {
+                    "type": "string",
+                    "description": "Salt used to encrypt the corresponding webhook token."
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "Overrides the location of the verification token on the abstract flow's webhook export \u2014 a JSON path into the request body or a query parameter name."
+                  },
+                  "key_crypt": {
+                    "type": "string",
+                    "description": "Encrypted form of the webhook HMAC or public key, stored at rest."
+                  },
+                  "key_salt": {
+                    "type": "string",
+                    "description": "Salt used to encrypt the corresponding webhook key."
+                  },
+                  "header": {
+                    "type": "string",
+                    "description": "Overrides the name of the request header that carries the HMAC signature on the abstract flow's webhook export."
+                  },
+                  "username": {
+                    "type": "string",
+                    "description": "Overrides the username used for basic-auth webhook verification on the abstract flow's export."
+                  },
+                  "password_crypt": {
+                    "type": "string",
+                    "description": "Encrypted form of the basic-auth webhook password, stored at rest."
+                  },
+                  "password_salt": {
+                    "type": "string",
+                    "description": "Salt used to encrypt the corresponding webhook password."
+                  },
+                  "successStatusCode": {
+                    "type": "integer",
+                    "description": "Overrides the HTTP status code returned to the webhook caller after successful processing."
+                  },
+                  "successBody": {
+                    "type": "string",
+                    "description": "Overrides the response body returned to the webhook caller after successful processing; ignored when the status code is 204."
+                  },
+                  "successMediaType": {
+                    "type": "string",
+                    "description": "Overrides the Content-Type of successful webhook responses; must match the format of the success body."
+                  }
+                }
+              },
+              "distributed": {
+                "type": "object",
+                "description": "Override distributed processing settings",
+                "properties": {
+                  "bearerToken_crypt": {
+                    "type": "string",
+                    "description": "Encrypted form of the distributed export's bearer token, stored at rest."
+                  },
+                  "bearerToken_salt": {
+                    "type": "string",
+                    "description": "Salt used to encrypt the corresponding bearer token."
+                  }
+                }
+              },
+              "hooks": {
+                "type": "object",
+                "description": "Override hook configurations"
+              },
+              "transform": {
+                "type": "object",
+                "description": "Override transformation settings"
+              },
+              "parsers": {
+                "type": "array",
+                "description": "Override parser configurations",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "filters": {
+                "type": "object",
+                "description": "Override filter configurations"
+              },
+              "formSchema": {
+                "type": "object",
+                "description": "Override form schema"
+              },
+              "preSaveSchema": {
+                "type": "object",
+                "description": "Override pre-save configuration"
+              },
+              "settings": {
+                "type": "object",
+                "description": "Override export-specific settings",
+                "additionalProperties": true
+              },
+              "idLockTemplate": {
+                "type": "string",
+                "description": "Override ID lock template"
+              }
+            }
+          }
+        },
+        "imports": {
+          "type": "array",
+          "description": "Override configurations for imports in the abstract flow.\n\nSimilar structure to export overrides but for import resources.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the abstract import being overridden"
+              },
+              "_connectionId": {
+                "type": "string",
+                "x-celigo-refModel": "connections",
+                "description": "Override the connection used by this import",
+                "examples": ["5f7c579b6411271af4e7cefb"]
+              },
+              "proceedOnFailure": {
+                "type": "boolean",
+                "description": "Override error handling behavior"
+              },
+              "responseMapping": {
+                "_circularRef": "./response-mapping.yml#/ResponseMapping"
+              },
+              "idLockTemplate": {
+                "type": "string",
+                "description": "Overrides the ID lock template on the abstract flow's import \u2014 a handlebars template that generates a lock key so records resolving to the same key are not submitted concurrently."
+              },
+              "dataURITemplate": {
+                "type": "string",
+                "description": "Overrides the data URI template on the abstract flow's import \u2014 a handlebars template that builds a link back to each record in the destination application's UI for error tracking."
+              },
+              "pathToMany": {
+                "type": "string",
+                "description": "Overrides the one-to-many path on the abstract flow's import \u2014 the JSON path to child records within each parent record."
+              },
+              "blobKeyPath": {
+                "type": "string",
+                "description": "Overrides the blob key path on the abstract flow's import \u2014 the path in the input record that holds the blob key identifying file content to import."
+              },
+              "filter": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the filter on the abstract flow's import, which selects which incoming records are sent to the destination system."
+              },
+              "traceKeyTemplate": {
+                "type": "string",
+                "description": "Overrides the trace key template on the abstract flow's import \u2014 a handlebars template controlling how each record's unique trace key is generated."
+              },
+              "parsers": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "Overrides the parser configurations on the abstract flow's import."
+              },
+              "hooks": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the hook configurations on the abstract flow's import \u2014 custom JavaScript hooks that run at fixed points in the import lifecycle."
+              },
+              "responseTransform": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the response transform on the abstract flow's import, which reshapes the destination system's response after records are imported."
+              },
+              "mapping": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the Mapper 1.0 mapping configuration on the abstract flow's import."
+              },
+              "mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "Overrides the Mapper 2.0 field mappings on the abstract flow's import, which transform incoming records into the destination system's field structure."
+              },
+              "lookups": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "Overrides the lookup definitions on the abstract flow's import, referenced by its field mappings."
+              },
+              "settingsForm": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the settings form definition on the abstract flow's import, which prompts users for values stored in `settings`."
+              },
+              "preSave": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the preSave hook on the abstract flow's import \u2014 a JavaScript hook that executes before the resource is saved."
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Overrides the custom settings on the abstract flow's import, accessible to hooks, filters, mappings, and handlebars templates at runtime."
+              }
+            }
+          }
+        },
+        "routers": {
+          "type": "array",
+          "description": "Override configurations for routers in the abstract flow.\n\nAllows customizing router behavior and branch configurations.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the abstract router being overridden"
+              },
+              "name": {
+                "type": "string",
+                "description": "Override router name"
+              },
+              "script": {
+                "type": "object",
+                "description": "Override routing script",
+                "properties": {
+                  "_scriptId": {
+                    "type": "string",
+                    "x-celigo-refModel": "scripts",
+                    "description": "Reference to the script resource containing the routing logic used in place of the abstract router's script.",
+                    "examples": ["66a1f2c3b4d5e6f7a8b9c0d1"]
+                  },
+                  "function": {
+                    "type": "string",
+                    "description": "Function name within the script that returns the branch name for each record."
+                  }
+                }
+              },
+              "branches": {
+                "type": "array",
+                "description": "Override branch configurations",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "_abstractId": {
+                      "type": "string",
+                      "description": "ID of the abstract branch being overridden"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Overrides the branch's display name within the router."
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Overrides the branch's description explaining its purpose and criteria."
+                    },
+                    "inputFilter": {
+                      "type": "object",
+                      "description": "Overrides the branch's input filter \u2014 the criteria that determine which records are routed to this branch.",
+                      "properties": {
+                        "version": {
+                          "type": "string",
+                          "description": "Version of the filter expression format used by the rules; currently only \"1\" is supported."
+                        },
+                        "rules": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "description": "Filter expression defining the branch's matching criteria, in prefix notation \u2014 the operator first, followed by its operands."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "overridesHelper": {
+      "type": "object",
+      "description": "Metadata for abstract flows that declares which fields in the flow's connections,\nexports, imports, and routers are overridable by instance flows.\n\nOnly valid on abstract flows (isAbstract: true). The backend rejects this field\non non-abstract flows. Each entry references a component of the abstract flow by\nits ID and lists the field names that instance flows are allowed to override.\n",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "description": "Flow-level field names that instance flows may override (e.g., \"schedule\", \"timezone\")",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["schedule", "timezone", "settings"]]
+        },
+        "connections": {
+          "type": "array",
+          "description": "Declares which connection-level fields are overridable per abstract flow connection.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the connection in the abstract flow"
+              },
+              "fields": {
+                "type": "array",
+                "description": "Field names on this connection that instance flows may override",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "exports": {
+          "type": "array",
+          "description": "Declares which export-level fields are overridable per abstract flow export.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the export in the abstract flow"
+              },
+              "fields": {
+                "type": "array",
+                "description": "Field names on this export that instance flows may override",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "imports": {
+          "type": "array",
+          "description": "Declares which import-level fields are overridable per abstract flow import.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the import in the abstract flow"
+              },
+              "fields": {
+                "type": "array",
+                "description": "Field names on this import that instance flows may override",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "routers": {
+          "type": "array",
+          "description": "Declares which router-level and branch-level fields are overridable per abstract flow router.\n",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_abstractId": {
+                "type": "string",
+                "description": "ID of the router in the abstract flow"
+              },
+              "fields": {
+                "type": "array",
+                "description": "Field names on this router that instance flows may override",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "branches": {
+                "type": "array",
+                "description": "Per-branch override declarations",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "_abstractId": {
+                      "type": "string",
+                      "description": "Index or ID of the branch in the abstract flow router"
+                    },
+                    "fields": {
+                      "type": "array",
+                      "description": "Field names on this branch that instance flows may override",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "_flowGroupingId": {
+      "type": ["string", "null"],
+      "format": "objectId",
+      "description": "Flow grouping for organizing related flows in the UI. References an entry in the\nintegration's `flowGroupings` array (not a standalone collection); invalid ids are\nsilently dropped by the server. At runtime the flow's steps read the referenced\ngroup's `settings` under the fixed scope key `flowGrouping` (e.g.\n`{{settings.flowGrouping.<fieldId>}}`).",
+      "examples": ["60a2c4e6f321d800129a1a3c"]
+    },
+    "_keepDeltaBehindFlowId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "flows",
+      "description": "Coordinates delta timing so this flow's checkpoint stays behind the referenced flow.\nUsed for parent-child data relationships where the parent must sync first.",
+      "examples": ["60a2c4e6f321d800129a1a3c"]
+    },
+    "_keepDeltaBehindExportId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "exports",
+      "description": "Like `_keepDeltaBehindFlowId` but targets a specific export within a flow.",
+      "examples": ["60a2c4e6f321d800129a1a3c"]
+    },
+    "aiDescription": {
+      "type": "object",
+      "description": "AI-generated descriptions and documentation for the resource.\n\nThis object contains automatically generated content that helps users\nunderstand the purpose, behavior, and configuration of the resource without\nrequiring them to analyze the technical details. The AI-generated content\nis sanitized and safe for display in the UI.\n",
+      "properties": {
+        "summary": {
+          "type": ["string", "null"],
+          "description": "Brief AI-generated summary of the resource's purpose and functionality.\n\nThis concise description provides a quick overview of what the resource does,\nwhat systems it interacts with, and its primary role in the integration.\nThe summary is suitable for display in list views, dashboards, and other\ncontexts where space is limited.\n\nMaximum length: 10KB\n",
+          "examples": [
+            "AI-generated overview of what this resource does and the systems it interacts with."
+          ]
+        },
+        "detailed": {
+          "type": ["string", "null"],
+          "description": "Comprehensive AI-generated description of the resource's functionality.\n\nThis detailed explanation covers the resource's purpose, configuration details,\ndata flow patterns, filtering logic, and other technical aspects. It provides\nin-depth information suitable for documentation, tooltips, or detailed views\nin the administration interface.\n\nThe content may include HTML formatting for improved readability.\n\nMaximum length: 10KB\n",
+          "examples": [
+            "<p>A detailed AI-generated explanation of this resource's purpose, configuration, and behavior.</p><p>The text is regenerated when the resource's configuration changes.</p>"
+          ]
+        },
+        "generatedOn": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Timestamp indicating when the AI description was generated.\n\nThis field helps track the freshness of the AI-generated content and\ndetermine when it might need to be regenerated due to changes in the\nresource's configuration or behavior.\n\nThe timestamp is recorded in ISO 8601 format with UTC timezone (Z suffix).\n",
+          "examples": ["2023-05-10T13:25:42Z"]
+        }
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "description": "Named aliases that map to specific resources within the flow.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Alias name.",
+            "examples": ["primaryExport"]
+          },
+          "_exportId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "exports",
+            "description": "Export referenced by this alias.",
+            "examples": ["60a2c4e6f321d800129a1a3c"]
+          },
+          "_importId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "imports",
+            "description": "Import referenced by this alias.",
+            "examples": ["66a1f2c3b4d5e6f7a8b9c0d1"]
+          },
+          "_flowId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "flows",
+            "description": "Flow referenced by this alias.",
+            "examples": ["5f8d43a1b9e5a80011a35f2d"]
+          },
+          "_connectionId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "connections",
+            "description": "Connection referenced by this alias.",
+            "examples": ["5f7c579b6411271af4e7cefa"]
+          }
+        }
+      }
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "When true, this flow is a draft that auto-deletes when its expiry passes\n(`draftExpiresAt` in the response). Set at creation; an update can clear the\nflag but never set it.",
+      "x-celigo-ai-guidance": [
+        "POST with `draft: true` arms the draft TTL (the server computes `draftExpiresAt`).\nPUT with `draft: false` clears the flag and the expiry, promoting the draft to a\npermanent flow. PUT with `draft: true` on a non-draft flow is silently ignored,\nand a PUT that omits the field leaves an existing draft flag unchanged."
+      ]
+    },
+    "sandbox": {
+      "type": "boolean",
+      "deprecated": true,
+      "description": "When true, the flow is created in the account's sandbox environment.\nHonored on create only.",
+      "x-celigo-ai-guidance": [
+        "Requires a sandbox subscription \u2014 without one, POST is rejected with 422\n`subscription_not_found`. On PUT the server silently ignores this field;\na flow cannot change environment by updating the document."
+      ]
+    },
+    "preSave": {
+      "type": "object",
+      "description": "Pre-save hook that runs a script before persisting flow changes.",
+      "properties": {
+        "function": {
+          "type": "string",
+          "description": "Function name to invoke.",
+          "examples": ["preSaveFlow"]
+        },
+        "_scriptId": {
+          "type": "string",
+          "format": "objectId",
+          "x-celigo-refModel": "scripts",
+          "description": "Script containing the pre-save function.",
+          "examples": ["66a1f2c3b4d5e6f7a8b9c0d1"]
+        }
+      }
+    },
+    "settingsForm": {
+      "type": "object",
+      "description": "Form definition for collecting flow-level settings from users in the UI.",
+      "additionalProperties": true,
+      "x-celigo-canon": {
+        "decision": "no-constraint",
+        "reason": "Freeform user/integrator payload \u2014 interiors deliberately unconstrained per the campaign rule; do not model keys.",
+        "method": "documented-contract",
+        "verified": "2026-07-03"
+      }
+    }
+  },
+  "required": ["name"]
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo on-premise-agent",
+  "type": "object",
+  "description": "Fields for creating or updating an on-premise agent.",
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Display name identifying where the agent is installed and what it accesses.",
+      "examples": ["Acme DC1 host \u2014 SQL Server + SFTP"]
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 5120,
+      "description": "Optional note about the agent's purpose or host environment.",
+      "examples": ["Runs on prod-db-01, accesses PostgreSQL and Redis."]
+    }
+  }
+}

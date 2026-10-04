@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo stack",
+  "type": "object",
+  "description": "Request body for creating or updating a stack.",
+  "required": ["name", "type"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "Human-readable display name for the stack.",
+      "examples": ["Production Server Stack", "Hooks Lambda (us-east-1)"]
+    },
+    "type": {
+      "type": "string",
+      "enum": ["server", "lambda"],
+      "description": "Execution environment type.",
+      "examples": ["server", "lambda"]
+    },
+    "framework": {
+      "type": "string",
+      "enum": ["twoDotZero"],
+      "description": "Framework version. Currently only `twoDotZero` is supported.",
+      "examples": ["twoDotZero"]
+    },
+    "server": {
+      "type": "object",
+      "description": "Configuration for server-type stacks. Required when `type` is `server`.",
+      "required": ["hostURI"],
+      "properties": {
+        "hostURI": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "Base URI of the server hosting the stack.",
+          "examples": ["https://my-stack-server.example.com:3000"]
+        },
+        "ipRanges": {
+          "type": "array",
+          "deprecated": true,
+          "description": "Allowed IP ranges for the server stack.",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["10.0.0.0/8", "192.168.1.0/24"]]
+        }
+      }
+    },
+    "lambda": {
+      "type": "object",
+      "description": "Configuration for AWS Lambda-type stacks. Required when `type` is `lambda`.",
+      "required": [
+        "accessKeyId",
+        "secretAccessKey",
+        "awsRegion",
+        "functionName"
+      ],
+      "properties": {
+        "accessKeyId": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "AWS access key ID for invoking the Lambda function.",
+          "examples": ["AKIAIOSFODNN7EXAMPLE"]
+        },
+        "secretAccessKey": {
+          "type": "string",
+          "maxLength": 511,
+          "description": "AWS secret access key. Write-only \u2014 responses mask it as \"******\".",
+          "examples": ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]
+        },
+        "awsRegion": {
+          "type": "string",
+          "enum": [
+            "us-east-1",
+            "us-east-2",
+            "us-west-1",
+            "us-west-2",
+            "ap-northeast-2",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "ap-northeast-1",
+            "ap-south-1",
+            "eu-central-1",
+            "eu-west-1"
+          ],
+          "description": "AWS region where the Lambda function is deployed.",
+          "examples": ["us-east-1"]
+        },
+        "functionName": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "Name or ARN of the AWS Lambda function.",
+          "examples": [
+            "my-integration-function",
+            "arn:aws:lambda:us-east-1:123456789012:function:my-function"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": ["Node.js", "C#", "Java", "Other"],
+          "default": "Node.js",
+          "description": "Programming language of the Lambda function.",
+          "examples": ["Node.js"]
+        }
+      }
+    },
+    "if": {
+      "properties": {
+        "type": {
+          "const": "server"
+        }
+      }
+    },
+    "then": {
+      "required": ["server"]
+    },
+    "else": {
+      "required": ["lambda"]
+    }
+  }
+}

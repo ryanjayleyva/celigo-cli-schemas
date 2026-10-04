@@ -1,0 +1,528 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo api",
+  "type": "object",
+  "description": "Request body for creating or updating an API. For builder-mode APIs, populate the `builder` object; for script-mode APIs, populate `script`. Set `type` explicitly to `builder` or `script`.",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Display name.",
+      "examples": ["Customer API", "Order Management API"]
+    },
+    "_integrationId": {
+      "type": ["string", "null"],
+      "format": "objectId",
+      "x-celigo-refModel": "integrations",
+      "description": "Integration this API belongs to. Builder mode only.",
+      "examples": ["5e9a8f7c6b3d2a0011c4e5f6"]
+    },
+    "_apiGroupingId": {
+      "type": ["string", "null"],
+      "format": "objectId",
+      "description": "One of the owning integration's apiGroupings. Requires _integrationId in the same write."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional description of the API's purpose.",
+      "examples": ["API for managing customer records in Salesforce"]
+    },
+    "type": {
+      "type": "string",
+      "enum": ["builder", "script"],
+      "default": "script",
+      "description": "API mode. Cannot be changed after creation.",
+      "examples": ["builder"]
+    },
+    "version": {
+      "type": "string",
+      "default": "v1",
+      "pattern": "^[a-zA-Z0-9\\-_\\.]+$",
+      "description": "Version segment of the public URL (/{version}/{relativeURI}).",
+      "examples": ["v1", "v2", "v1.0"]
+    },
+    "disabled": {
+      "type": "boolean",
+      "default": false,
+      "examples": [false]
+    },
+    "timeoutPeriod": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 120,
+      "description": "Request-timeout override in seconds (1-120).",
+      "examples": [120, 30]
+    },
+    "logging": {
+      "type": "object",
+      "description": "Execution-logging settings. Can only be changed via PATCH, not PUT.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["basic", "standard", "detailed", "accountLevel", "noLogging"]
+        },
+        "debugUntil": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "traceKeyTemplate": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "Handlebars template that computes each request's trace key.",
+      "examples": ["{{record.orderId}}"]
+    },
+    "pagination": {
+      "type": "object",
+      "description": "Cursor pagination for builder-mode APIs.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "examples": [true]
+        }
+      }
+    },
+    "script": {
+      "type": "object",
+      "description": "Script-mode configuration.",
+      "required": ["_scriptId", "function"],
+      "properties": {
+        "_scriptId": {
+          "type": "string",
+          "format": "objectId",
+          "x-celigo-refModel": "scripts",
+          "examples": ["60a2c4e6f321d800129a1a3c"]
+        },
+        "function": {
+          "type": "string",
+          "examples": ["handleRequest", "processOrder"]
+        }
+      }
+    },
+    "builder": {
+      "type": "object",
+      "description": "Builder-mode configuration defining request structure, routing, and response mapping.",
+      "properties": {
+        "request": {
+          "type": "object",
+          "required": ["relativeURI", "method"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 200,
+              "examples": ["Get Customer", "Create Order"]
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 10240
+            },
+            "relativeURI": {
+              "type": "string",
+              "maxLength": 131072,
+              "pattern": "^\\/[a-zA-Z0-9:_*\\/\\-\\.]*$",
+              "description": "URI path relative to the version. Use colon notation for path params: /customers/:id.",
+              "examples": ["/customers/:id", "/orders"]
+            },
+            "method": {
+              "type": "string",
+              "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+              "examples": ["GET", "POST"]
+            },
+            "headers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "pattern": "^[a-zA-Z0-9_-]+$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10240
+                  }
+                }
+              }
+            },
+            "pathParams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10240
+                  }
+                }
+              }
+            },
+            "queryParams": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "pattern": "^[a-zA-Z0-9_\\-:\\/]*$"
+                  },
+                  "dataType": {
+                    "type": "string",
+                    "enum": ["string", "number", "boolean"]
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10240
+                  }
+                }
+              }
+            },
+            "bodySchema": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "JSON Schema describing the expected request body structure."
+            },
+            "mockRequest": {
+              "type": "object",
+              "properties": {
+                "body": {
+                  "type": "object"
+                },
+                "headers": {
+                  "type": "object"
+                },
+                "pathParams": {
+                  "type": "object"
+                },
+                "queryParams": {
+                  "type": "object"
+                }
+              }
+            },
+            "transform": {
+              "type": "object",
+              "properties": {
+                "_scriptId": {
+                  "type": "string",
+                  "format": "objectId",
+                  "x-celigo-refModel": "scripts"
+                },
+                "function": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "routers": {
+          "type": "array",
+          "description": "Optional routers for conditional processing before the response stage. APIs only support first_matching_branch routing.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "examples": ["router_001", "validation_router"]
+              },
+              "name": {
+                "type": "string"
+              },
+              "routeRecordsTo": {
+                "type": "string",
+                "enum": ["first_matching_branch"],
+                "default": "first_matching_branch"
+              },
+              "routeRecordsUsing": {
+                "type": "string",
+                "enum": ["input_filters", "script"],
+                "default": "input_filters"
+              },
+              "script": {
+                "type": "object",
+                "properties": {
+                  "_scriptId": {
+                    "type": "string",
+                    "format": "objectId",
+                    "x-celigo-refModel": "scripts"
+                  },
+                  "function": {
+                    "type": "string"
+                  }
+                }
+              },
+              "branches": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "inputFilter": {
+                      "type": "object"
+                    },
+                    "nextRouterId": {
+                      "type": "string",
+                      "examples": ["apiRouter"]
+                    },
+                    "pageProcessors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": ["export", "import"]
+                          },
+                          "_exportId": {
+                            "type": "string",
+                            "format": "objectId",
+                            "x-celigo-refModel": "exports"
+                          },
+                          "_importId": {
+                            "type": "string",
+                            "format": "objectId",
+                            "x-celigo-refModel": "imports"
+                          },
+                          "hooks": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "required": ["branches"]
+          }
+        },
+        "responseRouter": {
+          "type": "object",
+          "description": "Final routing step that selects which response configuration to return. Must have id: apiRouter.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "enum": ["apiRouter"]
+            },
+            "routeRecordsUsing": {
+              "type": "string",
+              "enum": ["input_filters", "script"]
+            },
+            "script": {
+              "type": "object",
+              "properties": {
+                "_scriptId": {
+                  "type": "string",
+                  "format": "objectId",
+                  "x-celigo-refModel": "scripts"
+                },
+                "function": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "type": "array",
+          "description": "Response configurations. Must include exactly one success and one fail response.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "examples": ["success_response", "error_response"]
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 10240
+              },
+              "type": {
+                "type": "string",
+                "enum": ["success", "fail", "custom"],
+                "examples": ["success"]
+              },
+              "statusCode": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599,
+                "examples": [200, 201, 400, 404, 500]
+              },
+              "headers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "maxLength": 256,
+                      "pattern": "^[a-zA-Z0-9_-]+$"
+                    },
+                    "value": {
+                      "type": "string",
+                      "maxLength": 256,
+                      "examples": ["application/json", "{{requestId}}"]
+                    },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 10240
+                    }
+                  }
+                }
+              },
+              "inputFilter": {
+                "type": "object"
+              },
+              "bodySchema": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "mockInput": {
+                "type": ["object", "string"],
+                "required": ["page_of_records"],
+                "properties": {
+                  "page_of_records": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["record"],
+                      "properties": {
+                        "record": {
+                          "type": "object"
+                        },
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "testMode": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["dataType"],
+                  "properties": {
+                    "generate": {
+                      "type": "string",
+                      "examples": ["data.customerId"]
+                    },
+                    "dataType": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "object",
+                        "stringarray",
+                        "numberarray",
+                        "booleanarray",
+                        "objectarray",
+                        "arrayarray"
+                      ]
+                    },
+                    "extract": {
+                      "type": "string",
+                      "examples": ["record.id"]
+                    },
+                    "hardCodedValue": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "lookups": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "map": {
+                      "type": "object"
+                    },
+                    "default": {
+                      "type": "string"
+                    },
+                    "allowFailures": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "hooks": {
+                "type": "object",
+                "properties": {
+                  "preMap": {
+                    "type": "object",
+                    "properties": {
+                      "_scriptId": {
+                        "type": "string",
+                        "format": "objectId",
+                        "x-celigo-refModel": "scripts"
+                      },
+                      "function": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "postMap": {
+                    "type": "object",
+                    "properties": {
+                      "_scriptId": {
+                        "type": "string",
+                        "format": "objectId",
+                        "x-celigo-refModel": "scripts"
+                      },
+                      "function": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shipworks": {
+      "type": "object",
+      "description": "ShipWorks shipping-management credentials. Legacy feature.",
+      "required": ["username", "password"],
+      "properties": {
+        "username": {
+          "type": "string",
+          "examples": ["shipworks_user"]
+        },
+        "password": {
+          "type": "string",
+          "description": "Masked as \"******\" in GET responses.",
+          "examples": ["******"]
+        }
+      }
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "When true, this API is a draft that auto-deletes when its expiry passes."
+    }
+  },
+  "required": ["name", "type"]
+}

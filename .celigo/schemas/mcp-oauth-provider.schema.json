@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo mcp-oauth-provider",
+  "type": "object",
+  "description": "Request body for creating or updating an MCP OAuth provider. On PUT,\nthis is a full replacement; include all fields you want to keep because\nomitted optional fields are cleared.",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 150,
+      "description": "Display name for the OAuth provider.",
+      "examples": ["auth.example.com"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the provider's purpose.",
+      "examples": ["Production Auth0 tenant for MCP servers"]
+    },
+    "issuerURL": {
+      "type": "string",
+      "format": "uri",
+      "description": "OAuth 2.0 issuer URL. Must include `http://` or `https://` scheme. Bare hostnames are rejected.",
+      "examples": ["https://auth.example.com"]
+    },
+    "audience": {
+      "type": "string",
+      "description": "Expected `aud` claim on incoming access tokens.",
+      "examples": ["https://mcp.example.com"]
+    },
+    "scopes": {
+      "type": "array",
+      "description": "Required OAuth scopes. Incoming tokens must carry every listed scope.",
+      "items": {
+        "type": "string",
+        "enum": ["mcp:read", "mcp:write"]
+      },
+      "examples": [["mcp:read", "mcp:write"]]
+    },
+    "useIntrospection": {
+      "type": "boolean",
+      "default": false,
+      "description": "When `true`, opaque access tokens are validated via the issuer's RFC 7662 introspection endpoint using `clientId`/`clientSecret`. When `false`, only JWT tokens validated against JWKS are accepted."
+    },
+    "clientId": {
+      "type": ["string", "null"],
+      "description": "OAuth client ID for token introspection. Required when `useIntrospection` is `true`.",
+      "examples": ["my-client-id"]
+    },
+    "clientSecret": {
+      "type": ["string", "null"],
+      "description": "OAuth client secret for introspection. Masked as `\"******\"` in responses; sending the masked value on PUT leaves it unchanged."
+    }
+  },
+  "required": ["name", "issuerURL", "audience"]
+}

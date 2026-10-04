@@ -1,0 +1,1461 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo iclient",
+  "type": "object",
+  "description": "iClient configuration. The shape varies by `provider` \u2014 each provider\nrequires its own credential sub-object (`oauth2`, `netsuite`,\n`salesforce`, `ebay`, `amazonmws`, `azureserviceprincipal`,\n`googleserviceaccount`, `awsIam`).\nFor `custom_oauth2`, credentials go in the `oauth2` sub-object.\nSecrets (`clientSecret`, `privateKey`, etc.) are returned masked\nas `\"******\"`. On update, re-send that masked value to keep the\nexisting secret; secrets are not preserved if omitted.",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name for the iClient.",
+      "x-celigo-ai-guidance": [
+        "Name the iClient after the ONE application whose OAuth app / client credentials it holds, plus the account or environment when that distinguishes it (e.g. \"Google Drive OAuth App\", \"Shopify OAuth - mystore\").",
+        "Never name an iClient after a flow or use case \u2014 iClients are account-level credentials referenced by many connections (`_iClientId`), and a use-case name hides which application the client belongs to."
+      ],
+      "examples": ["Google Drive OAuth App"]
+    },
+    "provider": {
+      "type": "string",
+      "description": "Authentication provider that determines which credential fields apply.",
+      "x-celigo-ai-guidance": [
+        "## IMPORTANT NOTES:\n- This is not a human/vendor label \u2014 it is the provider key that selects an authentication method.",
+        "## IMPLEMENTATION GUIDANCE:\n- Pick the provider that matches the system you are authenticating against.\n- For generic OAuth2 providers, use `custom_oauth2`.\n- Ensure the corresponding auth configuration under `oauth2`, `jwt`, or provider-specific sections is populated as needed.",
+        "Specifies the authentication provider/method used by this iClient,\ndetermining which authentication flow and credential fields are used (e.g.,\nGoogle OAuth, Salesforce OAuth, NetSuite token-based auth,\nor a custom OAuth2 provider).",
+        "## FIELD BEHAVIOR:\n- Required.\n- Must be one of the supported provider enum values.\n- Drives the UI and validation rules for which authentication settings are shown/required.",
+        "## DEPENDENCY CHAIN:\n- Influences which auth sub-configurations are applicable (for example, `oauth2.*`, `netsuite.*`, `salesforce.*`, `jwt.*`).",
+        "Specifies the authentication provider/method used by this iClient,\ndetermining which authentication flow and credential fields are used (e.g.,\nGoogle OAuth, Salesforce OAuth, NetSuite token-based auth,\nor a custom OAuth2 provider).",
+        "Specifies the authentication provider/method used by this iClient,\ndetermining which authentication flow and credential fields are used (e.g.,\nGoogle OAuth, Salesforce OAuth, NetSuite token-based auth,\nor a custom OAuth2 provider)."
+      ],
+      "enum": [
+        "custom_oauth2",
+        "netsuite",
+        "amazonmws",
+        "awsIam",
+        "azureserviceprincipal",
+        "googleserviceaccount",
+        "integrator",
+        "salesforce",
+        "shopify",
+        "ebay-xml",
+        "microsoftbusinesscentral",
+        "google",
+        "azureoauth",
+        "squareup",
+        "zendesk",
+        "docusign",
+        "ebay",
+        "windowslive",
+        "bigcommerce",
+        "asana",
+        "box",
+        "dropbox",
+        "clover",
+        "servicenow",
+        "jobvite",
+        "twilio",
+        "certify",
+        "woocommerce"
+      ],
+      "x-enumDescriptions": {
+        "custom_oauth2": "Generic OAuth 2.0 provider for applications not listed.",
+        "netsuite": "NetSuite token-based authentication.",
+        "amazonmws": "Amazon Marketplace Web Service (MWS) authentication.",
+        "awsIam": "AWS IAM cross-account role authentication (assume-role with an external ID).",
+        "azureserviceprincipal": "Azure AD service principal (client credentials) authentication.",
+        "googleserviceaccount": "Google Cloud service-account key authentication (JSON key file).",
+        "integrator": "Celigo integrator.io internal authentication.",
+        "salesforce": "Salesforce OAuth 2.0 authentication.",
+        "shopify": "Shopify OAuth 2.0 authentication.",
+        "ebay-xml": "eBay Trading (XML) API authentication.",
+        "microsoftbusinesscentral": "Microsoft Dynamics 365 Business Central OAuth 2.0 authentication.",
+        "google": "Google OAuth 2.0 authentication.",
+        "azureoauth": "Microsoft Azure AD OAuth 2.0 authentication.",
+        "squareup": "Square OAuth 2.0 authentication.",
+        "zendesk": "Zendesk OAuth 2.0 authentication.",
+        "docusign": "DocuSign OAuth 2.0 authentication.",
+        "ebay": "eBay REST API OAuth 2.0 authentication.",
+        "windowslive": "Microsoft Windows Live OAuth authentication.",
+        "bigcommerce": "BigCommerce OAuth 2.0 authentication.",
+        "asana": "Asana OAuth 2.0 authentication.",
+        "box": "Box OAuth 2.0 authentication.",
+        "dropbox": "Dropbox OAuth 2.0 authentication.",
+        "clover": "Clover OAuth 2.0 authentication.",
+        "servicenow": "ServiceNow OAuth 2.0 authentication.",
+        "jobvite": "Jobvite API authentication.",
+        "twilio": "Twilio API authentication.",
+        "certify": "Certify API authentication.",
+        "woocommerce": "WooCommerce REST API authentication."
+      },
+      "x-celigo-canon": {
+        "decision": "verified-exact",
+        "reason": "The spec enum matches the server enum exactly \u2014 a zero-usage value still creates successfully while a bogus value is hard-rejected with an error naming this enum. Do not shrink to observed usage.",
+        "method": "live-probe",
+        "verified": "2026-07-03"
+      }
+    },
+    "published": {
+      "type": "boolean",
+      "description": "When true, this iClient is published and available for use.",
+      "x-celigo-ai-guidance": [
+        "## IMPLEMENTATION GUIDANCE:\n- Default to `false` unless you intend to publish the iClient.",
+        "Indicates whether this iClient is published (available/visible for use).",
+        "## EXAMPLES:\n- `true`\n- `false`",
+        "## FIELD BEHAVIOR:\n- Boolean flag: `true` or `false`.\n- Used to control publication status in the UI."
+      ]
+    },
+    "enableJWT": {
+      "type": "boolean",
+      "description": "Enables a JWT assertion as part of the OAuth token request.\nWhen true, `{{{iClient.jwt.token}}}` resolves to the signed\nJWT for use in the token URL request body. Requires the `jwt`\nsub-object to be configured.",
+      "x-celigo-ai-guidance": [
+        "## FIELD BEHAVIOR:\n- When `true`, the iClient includes a JWT assertion/token as part of the OAuth token request.\n- When `false`, the OAuth flow does not incorporate a JWT assertion component.",
+        "## IMPLEMENTATION GUIDANCE:\n- Enable only when your OAuth provider requires JWT assertion.\n- Populate the `jwt` configuration (e.g., `iClient.jwt.*`) so `{{{iClient.jwt.token}}}` can be resolved.\n- Use the resolved JWT token in the token request body parameters for the OAuth token URL, as required by the provider.",
+        "## TECHNICAL DETAILS:\n- The JWT token can be referenced via `{{{iClient.jwt.token}}}` during request templating.",
+        "## IMPORTANT NOTES:\n- This flag is for **OAuth JWT assertion** use-cases; it does not mean \"all requests must include a JWT Authorization header.\"\n- If enabled without configuring `iClient.jwt`, token generation will fail.",
+        "Enable this field when the OAuth provider requires an additional JWT assertion\nas a component of the OAuth authentication flow;\nwhen enabled,\nuse the Handlebars path `{{{iClient.jwt.token}}}` to obtain the JWT token value,\nwhich is then used in the request body of the token URL to generate an access token.",
+        "## EXAMPLES:\n- `true` (OAuth token request includes a JWT assertion component)\n- `false` (standard OAuth flow without JWT assertion)",
+        "## DEPENDENCY CHAIN:\n- Depends on `iClient.jwt` fields and the provider's OAuth token request requirements.\n- Used when constructing the token URL request body for OAuth.",
+        "Enable this field when the OAuth provider requires an additional JWT assertion\nas a component of the OAuth authentication flow;\nwhen enabled,\nuse the Handlebars path `{{{iClient.jwt.token}}}` to obtain the JWT token value,\nwhich is then used in the request body of the token URL to generate an access token.",
+        "Enable this field when the OAuth provider requires an additional JWT assertion\nas a component of the OAuth authentication flow;\nwhen enabled,\nuse the Handlebars path `{{{iClient.jwt.token}}}` to obtain the JWT token value,\nwhich is then used in the request body of the token URL to generate an access token."
+      ]
+    },
+    "enableIClientReferences": {
+      "type": "boolean",
+      "description": "When true, other resources can reference this iClient's fields via Handlebars expressions.",
+      "x-celigo-ai-guidance": [
+        "## IMPORTANT NOTES:\n- Enabling iClient references may require additional permissions or configurations on the client or server side.\n- Disabling this feature can improve security by limiting external references but may reduce functionality.\n- Changes to this setting might require a system restart or reinitialization to take effect.",
+        "## FIELD BEHAVIOR:\n- When set to true, iClient references are enabled, allowing the system to recognize and process iClient-related interactions.\n- When set to false, iClient references are disabled, and any related functionality will be ignored or unavailable.\n- The field typically accepts a boolean value.",
+        "## TECHNICAL DETAILS:\n- Typically implemented as a boolean flag in the configuration.\n- Controls conditional logic paths that handle iClient reference processing.\n- May influence API endpoints, middleware behavior, or client-server communication protocols.",
+        "Determines whether the system should enable support for iClient references,\nallowing integration and interaction with iClient components or services.\nThis setting controls the activation of features that facilitate communication,\ndata exchange, or functionality extension through iClient references.",
+        "## IMPLEMENTATION GUIDANCE:\n- Enable this setting only if your application requires integration with iClient components.\n- Ensure that enabling this does not conflict with other system configurations or security policies.\n- Validate the impact on performance and compatibility when toggling this setting.",
+        "## EXAMPLES:\n- true: Enables iClient references, allowing the system to interact with iClient services.\n- false: Disables iClient references, preventing any iClient-related processing.",
+        "## DEPENDENCY CHAIN:\n- May depend on the presence of iClient libraries or modules within the system.\n- Could be linked to authentication or authorization settings related to client references.\n- Might interact with other integration or communication-related configuration properties.",
+        "Determines whether the system should enable support for iClient references,\nallowing integration and interaction with iClient components or services.\nThis setting controls the activation of features that facilitate communication,\ndata exchange, or functionality extension through iClient references.",
+        "Determines whether the system should enable support for iClient references,\nallowing integration and interaction with iClient components or services.\nThis setting controls the activation of features that facilitate communication,\ndata exchange, or functionality extension through iClient references."
+      ]
+    },
+    "formType": {
+      "type": "string",
+      "enum": ["assistant", "http"],
+      "x-enumDescriptions": {
+        "assistant": "Guided setup form for applications where integrator.io provides a setup assistant; used when `_httpConnectorId` is set",
+        "http": "Standard HTTP configuration form."
+      },
+      "description": "UI form type. Set automatically by the UI: `assistant` when\n`_httpConnectorId` is present, `http` otherwise.",
+      "x-celigo-ai-guidance": [
+        "## IMPORTANT NOTES:\n- The value must be lowercase (`assistant` or `http`).\n- Changing this value impacts the UI experience for configuring the iClient.",
+        "## FIELD BEHAVIOR:\n- Controls the form layout and fields displayed in the UI.\n- May affect validation and conditional rendering in the UI.\n- Must be one of: `assistant`, `http`.",
+        "## EXAMPLES:\n- `assistant`\n- `http`",
+        "## DEPENDENCY CHAIN:\n- Depends on whether the iClient is tied to an HTTP Connector (`_httpConnectorId`).\n- Influences which UI renderer is selected for the resource.",
+        "Specifies which UI form is used to configure this iClient in integrator.io.",
+        "## IMPLEMENTATION GUIDANCE:\n- Prefer letting the UI default this value based on `_httpConnectorId` unless you have a specific reason to override it.\n- Use `assistant` when configuring via an iClient assistant-backed application.\n- Use `http` for the standard HTTP configuration form.",
+        "## TECHNICAL DETAILS:\n- Stored as a lowercase string enum."
+      ]
+    },
+    "_httpConnectorId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "httpconnectors",
+      "description": "HTTP connector backing this iClient's guided setup.",
+      "examples": ["5d2e9c8b7a6f4e3d2c1b0a99", "6a1f2b3c4d5e6f7a8b9c0d1e"],
+      "x-celigo-ai-guidance": [
+        "## IMPLEMENTATION GUIDANCE:\n- Ensure the ID corresponds to a valid and active HTTP connector within the system.\n- Validate the format of the ID to match expected patterns (e.g., UUID or predefined naming conventions).\n- Use this field to dynamically select or switch HTTP connectors in multi-connector environments.\n- Handle cases where the specified connector ID does not exist or is unavailable.",
+        "## TECHNICAL DETAILS:\n- Typically stored as a string data type.\n- May be used as a key in lookup tables or configuration maps.\n- Should be indexed for efficient retrieval in large-scale systems.",
+        "## DEPENDENCY CHAIN:\n- Depends on the existence of HTTP connector configurations within the system.\n- May influence or be influenced by authentication, proxy, or network settings tied to the connector.",
+        "## FIELD BEHAVIOR:\n- Accepts a string representing the connector's unique ID.\n- Used to reference an existing HTTP connector configuration.\n- Required when the operation depends on a specific HTTP connector.\n- Immutable once set during the lifecycle of the configuration.",
+        "Specifies the unique identifier for the HTTP connector used to establish network communication.\nThis ID links the configuration to a specific HTTP connector instance,\nenabling the system to route requests appropriately.",
+        "## IMPORTANT NOTES:\n- This field is critical for routing HTTP requests correctly.\n- Incorrect or missing connector IDs may lead to failed connections or errors.\n- The connector ID must be managed securely to prevent unauthorized access.",
+        "## EXAMPLES:\n- \"connector-1234abcd\"\n- \"http-conn-5678efgh\"\n- \"uuid-550e8400-e29b-41d4-a716-446655440000\"",
+        "Specifies the unique identifier for the HTTP connector used to establish network communication.\nThis ID links the configuration to a specific HTTP connector instance,\nenabling the system to route requests appropriately.",
+        "Specifies the unique identifier for the HTTP connector used to establish network communication.\nThis ID links the configuration to a specific HTTP connector instance,\nenabling the system to route requests appropriately."
+      ]
+    },
+    "_httpConnectorApiId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "httpconnectorapis",
+      "description": "HTTP connector API definition linked to this iClient.",
+      "examples": ["669e1d90e3e73a17fb1fb1eb", "5f3a9b2c8d4e1f6a7b0c2d3e"],
+      "x-celigo-ai-guidance": [
+        "## IMPLEMENTATION GUIDANCE:\n- Validate the ID against the list of available HTTP Connector APIs before assignment.\n- Ensure the ID format complies with the system's identifier standards (e.g., UUID or specific naming conventions).\n- Handle cases where the referenced API ID does not exist or is deprecated.\n- Use this property to dynamically bind or switch HTTP Connector APIs in configurations.",
+        "## FIELD BEHAVIOR:\n- Acts as a reference pointer to a specific HTTP Connector API instance.\n- Must be a valid and existing API identifier within the system.\n- Used to establish connections and route requests appropriately.\n- Typically immutable once set to ensure consistent API linkage.",
+        "## EXAMPLES:\n- \"api-123e4567-e89b-12d3-a456-426614174000\"\n- \"http-connector-v2\"\n- \"connectorApi_987654321\"",
+        "## TECHNICAL DETAILS:\n- Typically stored as a string data type.\n- Should be indexed for efficient lookup in large systems.\n- May be linked to metadata describing the HTTP Connector API's capabilities and endpoints.\n- Often integrated with API management tools or service registries.",
+        "Specifies the unique identifier of the HTTP Connector API associated with the\ncurrent configuration or operation.\nThis ID is used to reference and link the HTTP Connector API within the system,\nenabling seamless integration and communication between components.",
+        "## IMPORTANT NOTES:\n- This property is critical for routing HTTP requests correctly.\n- Incorrect or missing IDs can lead to failed API calls or misrouted traffic.\n- Changes to this ID should be managed carefully to avoid breaking integrations.\n- May require appropriate permissions to read or modify.",
+        "## DEPENDENCY CHAIN:\n- Depends on the existence of the HTTP Connector API registry or catalog.\n- Used by components responsible for HTTP request handling and routing.\n- May influence authentication, authorization, and logging mechanisms tied to the API.",
+        "Specifies the unique identifier of the HTTP Connector API associated with the\ncurrent configuration or operation.\nThis ID is used to reference and link the HTTP Connector API within the system,\nenabling seamless integration and communication between components.",
+        "Specifies the unique identifier of the HTTP Connector API associated with the\ncurrent configuration or operation.\nThis ID is used to reference and link the HTTP Connector API within the system,\nenabling seamless integration and communication between components."
+      ]
+    },
+    "settings": {
+      "type": "object",
+      "description": "Connector-specific settings (e.g. region, environment, instance\nURI). Shape varies by connector.",
+      "x-celigo-ai-guidance": [
+        "An object containing configuration options that customize the behavior and\nfeatures of the system or application.\nThis property allows users or developers to specify various parameters,\npreferences, and toggles that influence how the system operates,\nenabling flexible and dynamic adjustments to meet different requirements.",
+        "## EXAMPLES:\n- Setting a timeout duration with `\"timeout\": 3000`.\n- Configuring logging levels with `\"logging\": {\"level\": \"verbose\", \"output\": \"file\"}`.\n- Toggling feature flags such as `\"features\": {\"betaAccess\": true, \"newUI\": false}`.",
+        "## IMPLEMENTATION GUIDANCE:\n- Validate the structure and data types of the settings to ensure correctness.\n- Provide default values for unspecified settings to maintain predictable behavior.\n- Allow extensibility to accommodate future settings without breaking compatibility.\n- Document each configurable option clearly to guide users in setting appropriate values.",
+        "## IMPORTANT NOTES:\n- Changes to settings may require system restart or reinitialization to take effect.\n- Improper configuration can lead to unexpected behavior or degraded performance.\n- Sensitive settings should be protected and validated to prevent security risks.\n- The settings object should be kept as concise as possible to avoid complexity.",
+        "## TECHNICAL DETAILS:\n- Typically represented as a JSON object or equivalent data structure.\n- Supports various data types including strings, numbers, booleans, arrays, and nested objects.\n- May be stored in configuration files, databases, or managed via APIs.\n- Should support serialization and deserialization for persistence and transmission.",
+        "## FIELD BEHAVIOR:\n- Accepts a structured set of key-value pairs representing different configuration settings.\n- Can include nested objects to group related settings logically.\n- Modifications to this property typically affect system behavior immediately or upon the next initialization.\n- Supports enabling or disabling features, setting thresholds, defining modes, and other customizable options.",
+        "## DEPENDENCY CHAIN:\n- Dependent on the system's configuration management module.\n- May influence or be influenced by user preferences and environment variables.\n- Interacts with feature toggles, access controls, and runtime parameters.",
+        "An object containing configuration options that customize the behavior and\nfeatures of the system or application.\nThis property allows users or developers to specify various parameters,\npreferences, and toggles that influence how the system operates,\nenabling flexible and dynamic adjustments to meet different requirements.",
+        "An object containing configuration options that customize the behavior and\nfeatures of the system or application.\nThis property allows users or developers to specify various parameters,\npreferences, and toggles that influence how the system operates,\nenabling flexible and dynamic adjustments to meet different requirements."
+      ]
+    },
+    "settingsForm": {
+      "type": "object",
+      "description": "Dynamic UI form definition for the settings object.",
+      "x-celigo-ai-guidance": [
+        "## EXAMPLES:\n- A form object with fields for username, email preferences, and notification settings.\n- A nested form structure with sections for privacy, display, and account management.\n- Validation rules specifying required fields and acceptable value ranges.",
+        "An object representing the configuration and structure of a settings form used\nto capture user preferences or application parameters.\nThis form typically includes fields, validation rules, default values,\nand UI metadata necessary for rendering and processing the settings interface.",
+        "## IMPORTANT NOTES:\n- The form should be designed to accommodate localization and accessibility standards.\n- Changes to the form structure may require corresponding updates in the UI and backend processing.\n- Ensure sensitive data fields are handled securely and comply with privacy regulations.",
+        "## IMPLEMENTATION GUIDANCE:\n- Structure the form object to include field definitions, types, labels, and validation constraints.\n- Include metadata for UI rendering such as placeholders, tooltips, and grouping.\n- Ensure validation rules are comprehensive to prevent invalid input.\n- Support extensibility to add or modify fields without breaking existing functionality.",
+        "## TECHNICAL DETAILS:\n- Typically represented as a JSON object or similar structured data format.\n- May include nested objects or arrays to represent complex form hierarchies.\n- Validation rules can be expressed using standard schemas or custom logic.\n- Supports integration with form libraries or frameworks for rendering and state management.",
+        "## DEPENDENCY CHAIN:\n- Depends on UI components to render the form fields.\n- Relies on validation logic to enforce input correctness.\n- Interacts with backend services to save and retrieve settings data.",
+        "## FIELD BEHAVIOR:\n- Defines the layout and components of the settings form.\n- Contains input fields with associated validation and default values.\n- Supports dynamic updates based on user interaction or external data.\n- Facilitates submission and retrieval of user-configured settings.",
+        "An object representing the configuration and structure of a settings form used\nto capture user preferences or application parameters.\nThis form typically includes fields, validation rules, default values,\nand UI metadata necessary for rendering and processing the settings interface.",
+        "An object representing the configuration and structure of a settings form used\nto capture user preferences or application parameters.\nThis form typically includes fields, validation rules, default values,\nand UI metadata necessary for rendering and processing the settings interface."
+      ]
+    },
+    "oauth2": {
+      "type": "object",
+      "x-celigo-canon": {
+        "decision": "not-required",
+        "reason": "Server creates a custom_oauth2 iClient without it and GET serves no oauth2 key \u2014 the universal stored presence is DB-layer injection, not an API requirement.",
+        "method": "live-probe",
+        "verified": "2026-07-03"
+      },
+      "description": "OAuth 2.0 configuration. Used when `provider` is `custom_oauth2`\nor any OAuth-based provider.",
+      "x-celigo-ai-guidance": [
+        "## DEPENDENCY CHAIN:\n- Depends on the presence of an OAuth 2.0 compliant authorization server.\n- Requires secure storage and transmission of client credentials.\n- Interacts with API endpoints that enforce OAuth 2.0 token validation.",
+        "## IMPLEMENTATION GUIDANCE:\n- Ensure URLs for authorization and token endpoints are accurate and reachable.\n- Clearly define the scopes to limit access according to least privilege principles.\n- Include client ID and client secret securely, avoiding exposure in client-side code.\n- Support refresh tokens if long-lived sessions are required.\n- Validate tokens on the server side to maintain security.",
+        "## TECHNICAL DETAILS:\n- Typically includes fields like authorizationUrl, tokenUrl, refreshUrl, scopes, clientId, clientSecret, and grantTypes.\n- Uses HTTPS endpoints to ensure secure communication.\n- May support PKCE (Proof Key for Code Exchange) for enhanced security in public clients.\n- Tokens are usually JWTs or opaque tokens depending on the OAuth provider implementation.",
+        "## FIELD BEHAVIOR:\n- Defines the OAuth 2.0 flow and parameters required for client authentication.\n- Specifies the endpoints for obtaining authorization and access tokens.\n- Lists the scopes that determine the level of access granted.\n- Supports multiple OAuth 2.0 grant types (e.g., authorization code, client credentials).\n- Enables secure token exchange and refresh mechanisms.",
+        "## EXAMPLES:\n- Authorization code flow with authorization URL, token URL, and scopes.\n- Client credentials flow with token URL and client credentials.\n- Implicit flow configuration for single-page applications.\n- Refresh token configuration for renewing access tokens.",
+        "## IMPORTANT NOTES:\n- OAuth 2.0 configurations must comply with the security best practices to prevent token leakage.\n- Sensitive information such as client secrets should never be exposed publicly.\n- The choice of grant type depends on the client application type and security requirements.\n- Proper error handling should be implemented for token acquisition failures.",
+        "Configuration settings for OAuth 2.0 authentication,\nenabling secure authorization and access delegation for API clients.\nThis property typically includes details such as authorization URLs, token URLs,\nscopes, client credentials, and grant types supported by the OAuth 2.0 provider.",
+        "Configuration settings for OAuth 2.0 authentication,\nenabling secure authorization and access delegation for API clients.\nThis property typically includes details such as authorization URLs, token URLs,\nscopes, client credentials, and grant types supported by the OAuth 2.0 provider.",
+        "Configuration settings for OAuth 2.0 authentication,\nenabling secure authorization and access delegation for API clients.\nThis property typically includes details such as authorization URLs, token URLs,\nscopes, client credentials, and grant types supported by the OAuth 2.0 provider."
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "description": "OAuth 2.0 client ID from the provider's app registration.",
+          "x-celigo-ai-guidance": [
+            "## DEPENDENCY CHAIN:\n- Dependent on successful client registration with the OAuth 2.0 authorization server.\n- Used in conjunction with client secret (if applicable) during token requests.\n- Required for constructing authorization URLs and token exchange requests.",
+            "## FIELD BEHAVIOR:\n- Must be a unique string assigned by the authorization server.\n- Used in authorization and token request flows to identify the client application.\n- Typically remains constant for the lifetime of the client registration.\n- Should be included in all OAuth 2.0 requests where client identification is required.",
+            "## TECHNICAL DETAILS:\n- Typically a string of alphanumeric characters, sometimes including dashes or underscores.\n- May be case-sensitive depending on the OAuth provider.\n- Passed as a query parameter or in the request body during OAuth flows.\n- Must conform to the OAuth 2.0 specification and provider-specific requirements.",
+            "The unique identifier assigned to a client application during the OAuth 2.0\nregistration process.\nThis client ID is used to identify the application when making authorization\nrequests to the OAuth 2.0 authorization server.\nIt is a public value that is included in authorization requests and token\nexchanges to associate the requests with the registered client.",
+            "## IMPLEMENTATION GUIDANCE:\n- Obtain the client ID from the OAuth 2.0 provider during client registration.\n- Store the client ID securely within the application configuration.\n- Do not treat the client ID as a secret; it can be exposed in URLs and logs.\n- Validate the client ID format according to the OAuth provider's specifications.",
+            "## IMPORTANT NOTES:\n- The client ID is distinct from the client secret; the latter must be kept confidential.\n- Exposure of the client ID does not compromise security but is necessary for proper OAuth flows.\n- Ensure the client ID matches exactly the value registered with the OAuth provider to avoid authentication errors.",
+            "## EXAMPLES:\n- \"abc123xyz\"\n- \"myapp-client-001\"\n- \"1234567890abcdef\"",
+            "The unique identifier assigned to a client application during the OAuth 2.0\nregistration process.\nThis client ID is used to identify the application when making authorization\nrequests to the OAuth 2.0 authorization server.\nIt is a public value that is included in authorization requests and token\nexchanges to associate the requests with the registered client.",
+            "The unique identifier assigned to a client application during the OAuth 2.0\nregistration process.\nThis client ID is used to identify the application when making authorization\nrequests to the OAuth 2.0 authorization server.\nIt is a public value that is included in authorization requests and token\nexchanges to associate the requests with the registered client."
+          ],
+          "examples": [
+            "1096775564568-cucr5sv44tgfec4kkqsufi5k975d8orv.apps.googleusercontent.com",
+            "abc123xyz",
+            "myapp-client-001",
+            "1234567890abcdef"
+          ]
+        },
+        "clientSecret": {
+          "type": "string",
+          "description": "OAuth 2.0 client secret. Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plain client secret value here to set/update it.\n- To keep the existing secret unchanged during an update, omit this field (or, if the API/UI returns a masked value, keep `\"******\"` as-is).",
+            "This is the value you provide to configure or update the iClient.\nInternally,\nintegrator.io stores this secret encrypted at rest (for example as\n`clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a secret is already set.",
+            "This is the value you provide to configure or update the iClient.\nInternally,\nintegrator.io stores this secret encrypted at rest (for example as\n`clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a secret is already set.",
+            "This is the value you provide to configure or update the iClient.\nInternally,\nintegrator.io stores this secret encrypted at rest (for example as\n`clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a secret is already set."
+          ]
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "OAuth 2.0 scopes. The API accepts a string on input but\nalways returns an array in responses.",
+          "x-celigo-ai-guidance": [
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 authorization server's scope definitions.\n- Influences the access token issued and the permissions it carries.\n- Affects user consent and authorization decisions.\n- Interacts with resource server policies enforcing scope-based access control.",
+            "## TECHNICAL DETAILS:\n- Represented as a single string with space-separated scope values.\n- Included as a parameter in the authorization request and token request.\n- Returned in the access token response under the \"scope\" attribute.\n- Must conform to the OAuth 2.0 specification (RFC 6749) for scope syntax and semantics.",
+            "## FIELD BEHAVIOR:\n- Specifies one or more space-delimited strings representing permissions.\n- Determines the extent of access granted by the access token.\n- Can be optional or required depending on the OAuth 2.0 flow and server configuration.\n- May influence the consent screen shown to the user during authorization.",
+            "## IMPORTANT NOTES:\n- Scopes are case-sensitive and must be handled consistently.\n- Overly broad scopes can lead to security risks; prefer minimal necessary scopes.\n- Some OAuth providers define custom scopes specific to their APIs.\n- The absence of a scope parameter may result in default or limited access.",
+            "Defines the specific permissions or access levels that the OAuth 2.0 token\ngrants to the client application.\nScopes limit the actions and resources the client can access on behalf of the user,\nensuring fine-grained control over authorization.",
+            "## IMPLEMENTATION GUIDANCE:\n- Use standardized or well-defined scope values to ensure interoperability.\n- Clearly document the meaning and permissions associated with each scope.\n- Support multiple scopes by allowing space-separated values.\n- Validate requested scopes against allowed scopes on the authorization server.\n- Return granted scopes in the token response to inform the client of authorized permissions.",
+            "## EXAMPLES:\n- \"read\"\n- \"write\"\n- \"openid profile email\"\n- \"user.read user.write\"\n- \"https://api.example.com/auth/calendar.read\"",
+            "Defines the specific permissions or access levels that the OAuth 2.0 token\ngrants to the client application.\nScopes limit the actions and resources the client can access on behalf of the user,\nensuring fine-grained control over authorization.",
+            "Defines the specific permissions or access levels that the OAuth 2.0 token\ngrants to the client application.\nScopes limit the actions and resources the client can access on behalf of the user,\nensuring fine-grained control over authorization."
+          ]
+        },
+        "scopeDelimiter": {
+          "type": "string",
+          "description": "Character separating multiple scopes in a single string.\nDefaults to space per the OAuth 2.0 spec (RFC 6749).",
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Typically a single character but can be a string if supported.\n- Used in string splitting functions to parse scope lists.\n- Should be URL-encoded if it is a special character in URLs.\n- Must be consistent with the OAuth2 provider's expectations to ensure interoperability.",
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth2 authorization server's scope formatting requirements.\n- Influences how the 'scope' parameter in authorization requests and tokens is constructed and parsed.\n- May affect downstream components that interpret or validate scopes.",
+            "## FIELD BEHAVIOR:\n- Defines how multiple scopes are split and recognized in authorization requests.\n- Ensures correct parsing of scope strings when multiple scopes are requested simultaneously.\n- Influences the format of the scope parameter in OAuth2 authorization URLs and tokens.",
+            "Specifies the character or string used to separate multiple OAuth2 scopes within\na single authorization request or token.\nThis delimiter enables the parsing and interpretation of scope values when they\nare provided as a concatenated string.\nCommon delimiters include spaces, commas,\nor other characters depending on the OAuth2 provider's implementation.",
+            "## EXAMPLES:\n- Space character (\" \") as a delimiter: \"read write delete\"\n- Comma (\",\") as a delimiter: \"read,write,delete\"\n- Semicolon (\";\") as a delimiter: \"read;write;delete\"",
+            "## IMPLEMENTATION GUIDANCE:\n- Choose a delimiter that aligns with the OAuth2 provider's specification or defaults (e.g., space is standard per OAuth2 spec).\n- Ensure consistent use of the delimiter across all OAuth2 requests and responses.\n- Validate scope strings to correctly split and handle multiple scopes using this delimiter.\n- Document the chosen delimiter clearly for developers integrating with the API.",
+            "## IMPORTANT NOTES:\n- The OAuth2 specification (RFC 6749) recommends using a space character as the scope delimiter.\n- Some OAuth2 providers may use non-standard delimiters; this property allows customization to accommodate those cases.\n- Incorrect delimiter configuration can lead to authorization failures or incorrect scope parsing.\n- When omitted, the default delimiter is typically a space character.",
+            "Specifies the character or string used to separate multiple OAuth2 scopes within\na single authorization request or token.\nThis delimiter enables the parsing and interpretation of scope values when they\nare provided as a concatenated string.\nCommon delimiters include spaces, commas,\nor other characters depending on the OAuth2 provider's implementation.",
+            "Specifies the character or string used to separate multiple OAuth2 scopes within\na single authorization request or token.\nThis delimiter enables the parsing and interpretation of scope values when they\nare provided as a concatenated string.\nCommon delimiters include spaces, commas,\nor other characters depending on the OAuth2 provider's implementation."
+          ],
+          "examples": [" "]
+        },
+        "redirectUri": {
+          "type": "string",
+          "description": "OAuth 2.0 redirect URI registered with the provider.",
+          "x-celigo-ai-guidance": [
+            "## DEPENDENCY CHAIN:\n- Depends on the authorization server's registered redirect URIs.\n- Used in conjunction with client_id and response_type parameters.\n- Integral to OAuth 2.0 authorization code and implicit grant flows.",
+            "## TECHNICAL DETAILS:\n- Must conform to URI syntax as per RFC 3986.\n- Typically uses HTTPS scheme for security.\n- Should be URL-encoded when included in authorization requests.\n- The authorization server compares the redirect URI in the request with the registered URIs for exact match or pattern match depending on server policy.",
+            "## EXAMPLES:\n- https://client.example.com/callback\n- https://app.example.com/oauth2/callback\n- https://localhost:8080/auth/callback (for development purposes)",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the redirect URI is registered with the authorization server before use.\n- Use HTTPS to protect the integrity and confidentiality of the redirect.\n- Avoid using wildcard or overly broad redirect URIs.\n- Validate the redirect URI strictly on the server side to prevent open redirect vulnerabilities.",
+            "## IMPORTANT NOTES:\n- Mismatched redirect URIs will cause authorization requests to fail.\n- Redirect URIs should not contain fragments (#).\n- Avoid using query parameters unless necessary and registered.\n- The redirect URI is critical for security; improper configuration can lead to token leakage.",
+            "## FIELD BEHAVIOR:\n- Specifies the callback endpoint for the authorization response.\n- Must be an absolute URI.\n- Used to return authorization codes or tokens after user consent.\n- Validated against pre-registered URIs to ensure security.",
+            "The URI to which the authorization server will redirect the user-agent after\ngranting or denying access.\nThis URI must be registered with the authorization server and should exactly\nmatch one of the pre-registered redirect URIs to prevent security\nvulnerabilities such as open redirect attacks.\nIt is used in OAuth 2.0 authorization flows to receive authorization codes or\naccess tokens securely.",
+            "The URI to which the authorization server will redirect the user-agent after\ngranting or denying access.\nThis URI must be registered with the authorization server and should exactly\nmatch one of the pre-registered redirect URIs to prevent security\nvulnerabilities such as open redirect attacks.\nIt is used in OAuth 2.0 authorization flows to receive authorization codes or\naccess tokens securely.",
+            "The URI to which the authorization server will redirect the user-agent after\ngranting or denying access.\nThis URI must be registered with the authorization server and should exactly\nmatch one of the pre-registered redirect URIs to prevent security\nvulnerabilities such as open redirect attacks.\nIt is used in OAuth 2.0 authorization flows to receive authorization codes or\naccess tokens securely."
+          ],
+          "examples": [
+            "https://api.integrator.io/connection/oauth2callback",
+            "https://client.example.com/callback",
+            "https://app.example.com/oauth2/callback",
+            "https://localhost:8080/auth/callback"
+          ]
+        },
+        "grantType": {
+          "type": "string",
+          "enum": ["authorizecode", "password", "clientcredentials"],
+          "x-enumDescriptions": {
+            "authorizecode": "Authorization Code grant (server-side flows with user authorization).",
+            "password": "Resource Owner Password Credentials grant (trusted apps with direct credentials).",
+            "clientcredentials": "Client Credentials grant (machine-to-machine, no user involvement)."
+          },
+          "description": "OAuth 2.0 grant type.",
+          "examples": ["password"],
+          "x-celigo-ai-guidance": [
+            "## FIELD BEHAVIOR:\n- Defines the method by which the client application requests an access token.\n- Influences the parameters required in the token request.\n- Determines the security and user interaction model of the OAuth flow.\n- Must align with the authorization server's supported grant types.",
+            "## IMPORTANT NOTES:\n- Some grant types require additional parameters (e.g., \"authorization_code\" requires a code).\n- Using the \"password\" grant type is discouraged due to security risks.\n- The choice of grant type affects the overall security posture of the application.\n- Always use secure communication channels (HTTPS) when transmitting tokens and credentials.",
+            "## TECHNICAL DETAILS:\n- Must be a string matching one of the OAuth 2.0 defined grant types or extensions.\n- Sent as a parameter in the token request payload or URL-encoded form.\n- Case-sensitive and must conform to the OAuth 2.0 specification (RFC 6749).\n- May require additional headers or parameters depending on the grant type.",
+            "## EXAMPLES:\n- \"authorization_code\" for standard web server flows involving user authorization.\n- \"client_credentials\" for machine-to-machine authentication without user involvement.\n- \"password\" for legacy applications where the user provides credentials directly.\n- \"refresh_token\" to obtain a new access token using a previously issued refresh token.",
+            "## IMPLEMENTATION GUIDANCE:\n- Choose the grant type based on the client application's capabilities and security requirements.\n- Ensure the authorization server supports the specified grant type.\n- Validate the grant type value against the OAuth 2.0 specification and any extensions used.\n- Handle errors gracefully if an unsupported or invalid grant type is provided.",
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 authorization server configuration.\n- Influences the required request parameters and token endpoint behavior.\n- Affects client registration details and scopes granted.",
+            "Specifies the OAuth 2.0 grant type used to obtain an access token from the authorization server.\nThis parameter determines the flow of the authentication process and how the\nclient interacts with the authorization server to request and receive tokens.\nCommon grant types include \"authorization_code\", \"client_credentials\",\n\"password\", and \"refresh_token\",\neach serving different use cases and security considerations.",
+            "Specifies the OAuth 2.0 grant type used to obtain an access token from the authorization server.\nThis parameter determines the flow of the authentication process and how the\nclient interacts with the authorization server to request and receive tokens.\nCommon grant types include \"authorization_code\", \"client_credentials\",\n\"password\", and \"refresh_token\",\neach serving different use cases and security considerations.",
+            "Specifies the OAuth 2.0 grant type used to obtain an access token from the authorization server.\nThis parameter determines the flow of the authentication process and how the\nclient interacts with the authorization server to request and receive tokens.\nCommon grant types include \"authorization_code\", \"client_credentials\",\n\"password\", and \"refresh_token\",\neach serving different use cases and security considerations."
+          ]
+        },
+        "clientCredentialsLocation": {
+          "type": "string",
+          "enum": ["basicauthheader", "body"],
+          "x-enumDescriptions": {
+            "basicauthheader": "Client credentials sent in the Authorization header (HTTP Basic).",
+            "body": "Client credentials sent as form parameters in the POST body."
+          },
+          "description": "Where to include client credentials in the token request.",
+          "x-celigo-ai-guidance": [
+            "## IMPORTANT NOTES:\n- Sending credentials in the header is generally preferred for security reasons.\n- Some OAuth 2.0 servers may only support one method; verify server documentation.\n- Incorrect configuration may lead to authentication failures.\n- Avoid exposing client credentials in URLs or query parameters.",
+            "## IMPLEMENTATION GUIDANCE:\n- Use \"header\" to send credentials via the Authorization header using Basic authentication.\n- Use \"body\" to include credentials as form parameters in the POST request body.\n- Ensure compatibility with the OAuth 2.0 server's expected credential location.\n- Validate that the chosen location aligns with security best practices and server requirements.",
+            "## FIELD BEHAVIOR:\n- Defines where to place client credentials during the token request.\n- Accepts values indicating header or body placement.\n- Influences how the authentication server receives and validates client credentials.",
+            "Specifies the location within the HTTP request where the client credentials\n(such as client ID and client secret) should be included when using the OAuth\n2.0 client credentials grant type.\nThis setting determines whether the credentials are sent in the request header\n(typically using the Authorization header with Basic authentication) or in the\nrequest body as form parameters.",
+            "## TECHNICAL DETAILS:\n- When set to \"header\", credentials are base64-encoded and included in the Authorization header.\n- When set to \"body\", credentials are included as \"client_id\" and \"client_secret\" form parameters.\n- Must comply with the OAuth 2.0 specification (RFC 6749) regarding client authentication methods.",
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 client credentials grant type being used.\n- Works in conjunction with clientId and clientSecret properties.\n- Affects the construction of the token request sent to the authorization server.",
+            "Specifies the location within the HTTP request where the client credentials\n(such as client ID and client secret) should be included when using the OAuth\n2.0 client credentials grant type.\nThis setting determines whether the credentials are sent in the request header\n(typically using the Authorization header with Basic authentication) or in the\nrequest body as form parameters.",
+            "Specifies the location within the HTTP request where the client credentials\n(such as client ID and client secret) should be included when using the OAuth\n2.0 client credentials grant type.\nThis setting determines whether the credentials are sent in the request header\n(typically using the Authorization header with Basic authentication) or in the\nrequest body as form parameters."
+          ]
+        },
+        "accessTokenLocation": {
+          "type": "string",
+          "enum": ["url", "header", "body"],
+          "x-enumDescriptions": {
+            "url": "Access token sent as a URL query parameter.",
+            "header": "Access token sent in the Authorization header.",
+            "body": "Access token sent in the POST request body."
+          },
+          "description": "Where the access token is included in API requests.",
+          "x-celigo-ai-guidance": [
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 flow and server requirements.\n- Works in conjunction with the access token value and token type.\n- Influences request construction and security considerations.",
+            "## TECHNICAL DETAILS:\n- When set to \"header\", typically uses the \"Authorization: Bearer <token>\" format.\n- When set to \"query\", appends the token as a URL parameter, often named \"access_token\".\n- When set to \"body\", includes the token in the request payload, usually as a form parameter.\n- Must be handled securely to prevent token leakage.",
+            "## FIELD BEHAVIOR:\n- Defines the method of including the access token in API requests.\n- Common values include \"header\", \"query\", or \"body\".\n- Influences how the client constructs the request for authentication.",
+            "## IMPLEMENTATION GUIDANCE:\n- Verify the API specification to determine the supported token locations.\n- Use \"header\" to include the token in the Authorization header (e.g., Bearer token).\n- Use \"query\" to append the token as a URL query parameter.\n- Use \"body\" to include the token within the request payload, typically for POST requests.\n- Ensure secure transmission, especially when using query parameters.",
+            "## IMPORTANT NOTES:\n- Sending tokens in query parameters can expose them in logs or browser history; use with caution.\n- The chosen location must align with the OAuth 2.0 server's expectations.\n- Some APIs may only support one method; incorrect configuration can lead to authentication failures.",
+            "Specifies the location where the OAuth 2.0 access token should be included when\nmaking API requests.\nThis determines how the access token is transmitted to the server,\nsuch as in the HTTP header, query parameters, or request body.\nProper configuration of this field ensures that the token is sent in a manner\ncompatible with the API's authentication requirements.",
+            "Specifies the location where the OAuth 2.0 access token should be included when\nmaking API requests.\nThis determines how the access token is transmitted to the server,\nsuch as in the HTTP header, query parameters, or request body.\nProper configuration of this field ensures that the token is sent in a manner\ncompatible with the API's authentication requirements.",
+            "Specifies the location where the OAuth 2.0 access token should be included when\nmaking API requests.\nThis determines how the access token is transmitted to the server,\nsuch as in the HTTP header, query parameters, or request body.\nProper configuration of this field ensures that the token is sent in a manner\ncompatible with the API's authentication requirements."
+          ]
+        },
+        "accessTokenHeaderName": {
+          "type": ["string", "null"],
+          "description": "Header name for the access token when `accessTokenLocation`\nis `header`. Defaults to `Authorization`.",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- `Authorization` (typically with value `Bearer <token>`)\n- `X-Access-Token`",
+            "Header name used to send the OAuth 2.0 access token."
+          ],
+          "examples": ["Authorization", "`Authorization`", "`X-Access-Token`"],
+          "x-celigo-canon": {
+            "decision": "no-enum",
+            "reason": "Free-form header names chosen per target API \u2014 dozens of distinct production values; no vocabulary.",
+            "method": "full-population",
+            "verified": "2026-07-03"
+          }
+        },
+        "accessTokenParamName": {
+          "type": "string",
+          "description": "Parameter name when the access token is sent as a\nquery or body parameter.",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- `access_token`\n- `token`\n- `auth_token`",
+            "Parameter name used when the access token is passed as a query/body parameter\n(instead of a header).",
+            "Parameter name used when the access token is passed as a query/body parameter\n(instead of a header).",
+            "Parameter name used when the access token is passed as a query/body parameter\n(instead of a header)."
+          ],
+          "examples": [
+            "access_token",
+            "`access_token`",
+            "`token`",
+            "`auth_token`"
+          ],
+          "x-celigo-canon": {
+            "decision": "no-enum",
+            "reason": "Free-form parameter names chosen per target API \u2014 dozens of distinct production values; no vocabulary.",
+            "method": "full-population",
+            "verified": "2026-07-03"
+          }
+        },
+        "accessTokenPath": {
+          "type": "string",
+          "description": "JSON path to extract the access token from the token\nendpoint response body.",
+          "x-celigo-ai-guidance": [
+            "## FIELD BEHAVIOR:\n- Defines the endpoint path for access token requests in the OAuth2 flow.\n- Must be a valid relative URL path starting with a forward slash (/).\n- Used during the token exchange phase after obtaining an authorization code or other grant types.\n- Typically combined with the authorization server's base URL to form the complete token endpoint URL.",
+            "Specifies the relative URL path on the OAuth2 authorization server where the\naccess token request should be sent.\nThis path is appended to the base URL of the authorization server to form the\nfull endpoint for obtaining an access token during the OAuth2 authentication\nflow.\nIt is essential for enabling clients to exchange authorization grants for access\ntokens securely.",
+            "## IMPORTANT NOTES:\n- This path is critical for the OAuth2 token exchange process; incorrect configuration will prevent successful authentication.\n- It should not include the full URL, only the path component.\n- Must align with the OAuth2 server's documentation to ensure interoperability.\n- Often used in conjunction with other OAuth2 properties like client ID, client secret, and authorization path.",
+            "## DEPENDENCY CHAIN:\n- Depends on the base URL of the OAuth2 authorization server.\n- Used alongside authorizationPath and other OAuth2 configuration properties.\n- Integral to the OAuth2 token grant process.",
+            "## EXAMPLES:\n- /oauth2/token\n- /api/v1/access_token\n- /auth/token",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the path corresponds exactly to the OAuth2 server's token endpoint specification.\n- Validate that the path is correctly formatted and accessible.\n- Avoid including query parameters or fragments in this path; it should be a clean URL path.\n- Confirm compatibility with the OAuth2 server's expected token endpoint URL structure.",
+            "## TECHNICAL DETAILS:\n- Expected to be a URI path string.\n- Should begin with a forward slash (/).\n- Combined with the OAuth2 server's base URL to form the full token endpoint URI.\n- Utilized in HTTP POST requests to obtain access tokens.",
+            "Specifies the relative URL path on the OAuth2 authorization server where the\naccess token request should be sent.\nThis path is appended to the base URL of the authorization server to form the\nfull endpoint for obtaining an access token during the OAuth2 authentication\nflow.\nIt is essential for enabling clients to exchange authorization grants for access\ntokens securely.",
+            "Specifies the relative URL path on the OAuth2 authorization server where the\naccess token request should be sent.\nThis path is appended to the base URL of the authorization server to form the\nfull endpoint for obtaining an access token during the OAuth2 authentication\nflow.\nIt is essential for enabling clients to exchange authorization grants for access\ntokens securely."
+          ],
+          "examples": [
+            "access_token",
+            "/oauth2/token",
+            "/api/v1/access_token",
+            "/auth/token"
+          ]
+        },
+        "refreshTokenPath": {
+          "type": "string",
+          "description": "JSON path to extract the refresh token from the token\nendpoint response body.",
+          "x-celigo-ai-guidance": [
+            "## IMPORTANT NOTES:\n- This path is distinct from the initial token request endpoint.\n- The refresh token flow requires that the client has previously obtained a refresh token.\n- Not all OAuth 2.0 providers support refresh tokens; verify compatibility.\n- The endpoint must support secure communication protocols (e.g., HTTPS).",
+            "## EXAMPLES:\n- \"/oauth2/token/refresh\"\n- \"https://auth.example.com/oauth2/token\"\n- \"/api/v1/auth/refresh-token\"",
+            "## DEPENDENCY CHAIN:\n- Depends on the existence of a valid refresh token issued during initial authentication.\n- Works in conjunction with the access token and client credentials.\n- Related to the OAuth 2.0 token endpoint configuration.",
+            "The relative or absolute URL path used to request a refresh token from the OAuth\n2.0 authorization server.\nThis endpoint is typically called when the current access token has expired or\nis about to expire,\nallowing the client to obtain a new access token without requiring the user to re-authenticate.\nThe path should conform to the OAuth 2.0 specification for token refresh\nrequests and support the necessary HTTP methods,\nusually POST.",
+            "## TECHNICAL DETAILS:\n- Typically uses the HTTP POST method with form-encoded parameters.\n- Requires parameters such as grant_type=refresh_token and the refresh_token itself.\n- Responses include a new access token and optionally a new refresh token.\n- Must handle scopes and token expiration as per OAuth 2.0 standards.",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the path is correctly formatted as a relative or absolute URL.\n- Confirm that the authorization server supports refresh token requests at this endpoint.\n- Secure the endpoint with appropriate authentication and authorization measures.\n- Validate that the client credentials and refresh token are correctly handled during the request.\n- Handle error responses gracefully, such as invalid or expired refresh tokens.",
+            "## FIELD BEHAVIOR:\n- Specifies the endpoint for refreshing OAuth 2.0 access tokens.\n- Used by the client application to maintain authenticated sessions seamlessly.\n- Invoked automatically by the client when the access token expires or is near expiration.\n- Must be accessible and correctly configured on the authorization server.",
+            "The relative or absolute URL path used to request a refresh token from the OAuth\n2.0 authorization server.\nThis endpoint is typically called when the current access token has expired or\nis about to expire,\nallowing the client to obtain a new access token without requiring the user to re-authenticate.\nThe path should conform to the OAuth 2.0 specification for token refresh\nrequests and support the necessary HTTP methods,\nusually POST.",
+            "The relative or absolute URL path used to request a refresh token from the OAuth\n2.0 authorization server.\nThis endpoint is typically called when the current access token has expired or\nis about to expire,\nallowing the client to obtain a new access token without requiring the user to re-authenticate.\nThe path should conform to the OAuth 2.0 specification for token refresh\nrequests and support the necessary HTTP methods,\nusually POST."
+          ],
+          "examples": [
+            "refresh_token",
+            "/oauth2/token/refresh",
+            "https://auth.example.com/oauth2/token",
+            "/api/v1/auth/refresh-token"
+          ]
+        },
+        "scheme": {
+          "type": "string",
+          "description": "Authorization scheme prefix (e.g. `Bearer`, `Basic`).",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- \"authorization_code\" for server-side web applications.\n- \"implicit\" for single-page applications.\n- \"password\" for trusted applications with user credentials.\n- \"client_credentials\" for machine-to-machine authentication.",
+            "## IMPLEMENTATION GUIDANCE:\n- Choose the scheme that best fits the client application type and security context.\n- Ensure the scheme aligns with the OAuth 2.0 specification and server capabilities.\n- Clearly document the chosen scheme to aid client developers in implementation.",
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 specification version supported.\n- Interacts with token endpoint and authorization endpoint configurations.\n- Influences client registration and credential management.",
+            "## IMPORTANT NOTES:\n- Selecting an inappropriate scheme can lead to security vulnerabilities.\n- Some schemes may require additional parameters or configurations.\n- The scheme impacts token lifecycle and refresh mechanisms.",
+            "Specifies the OAuth 2.0 authorization scheme used for securing API requests.\nThis field defines the method by which the client obtains and presents access\ntokens to authenticate and authorize API calls.\nCommon schemes include \"authorization_code\", \"implicit\", \"password\",\nand \"client_credentials\",\neach representing a different OAuth 2.0 flow tailored to various client types\nand security requirements.",
+            "## FIELD BEHAVIOR:\n- Determines the OAuth 2.0 flow applied for token acquisition.\n- Influences how clients interact with the authorization server.\n- Guides the expected parameters and endpoints involved in the authentication process.",
+            "## TECHNICAL DETAILS:\n- Typically represented as a string value.\n- Must conform to recognized OAuth 2.0 flow identifiers.\n- Used by client libraries to determine authentication steps.",
+            "Specifies the OAuth 2.0 authorization scheme used for securing API requests.\nThis field defines the method by which the client obtains and presents access\ntokens to authenticate and authorize API calls.\nCommon schemes include \"authorization_code\", \"implicit\", \"password\",\nand \"client_credentials\",\neach representing a different OAuth 2.0 flow tailored to various client types\nand security requirements.",
+            "Specifies the OAuth 2.0 authorization scheme used for securing API requests.\nThis field defines the method by which the client obtains and presents access\ntokens to authenticate and authorize API calls.\nCommon schemes include \"authorization_code\", \"implicit\", \"password\",\nand \"client_credentials\",\neach representing a different OAuth 2.0 flow tailored to various client types\nand security requirements."
+          ],
+          "examples": [
+            "Bearer",
+            "authorization_code",
+            "implicit",
+            "password",
+            "client_credentials"
+          ]
+        },
+        "validDomainNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Registrable domains (`domain.com`, `domain.co.uk` \u2014 the host with its\nsubdomains removed) of the OAuth URLs this client's credentials are\nsent to: the access token, authorization, and revoke URLs. Before an\nOAuth request leaves integrator.io, the target URL's registrable\ndomain must appear here; a full hostname never matches.",
+          "examples": [
+            ["domain.com"],
+            ["domain.com", "domain1.com", "domain2.com"],
+            ["microsoftonline.com", "microsoft.com"]
+          ],
+          "x-celigo-ai-guidance": [
+            "Store the registrable domain, never the hostname. For the token URL\n`https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token` the entry is\n`microsoftonline.com`; `login.microsoftonline.com` fails the connection test with\n`[invalid_domain] The domain of request url should be present in\niClient.oauth2.validDomainNames` and no request is sent. Public suffixes are\nhonoured: `auth.example.co.uk` \u2192 `example.co.uk`, not `co.uk`.",
+            "List the registrable domain of every OAuth URL on the client (token, authorization,\nrevoke) once each \u2014 a missing token-URL domain is what blocks the connection.\nCeligo's connector setup guides also list the API host's registrable domain next to\nthem (Microsoft: `microsoftonline.com`, `microsoft.com`); include it to match the\nguides \u2014 an extra entry is harmless.",
+            "When a connection using this client reports `[invalid_domain]`, the fix is this\nfield \u2014 replace hostnames with registrable domains. The connection's base URI and\nping path are where the request goes, not where the allow-list lives."
+          ]
+        },
+        "failPath": {
+          "type": "string",
+          "description": "Response body path to check for auth errors. Set only if\nthe API uses a field in the response body (not just HTTP\nstatus) to indicate auth failures.",
+          "x-celigo-ai-guidance": [
+            "This field only needs to be set if the API returns a field in the HTTP response\nbody to indicate auth errors.\nFor example,\nif an API returns the field `errorMessage` with the value `Auth failed`,\nthen set this field to `errorMessage`.",
+            "## EXAMPLES:\n- `errorMessage`\n- `error`\n- `errors.0.message`",
+            "This field only needs to be set if the API returns a field in the HTTP response\nbody to indicate auth errors.\nFor example,\nif an API returns the field `errorMessage` with the value `Auth failed`,\nthen set this field to `errorMessage`.",
+            "This field only needs to be set if the API returns a field in the HTTP response\nbody to indicate auth errors.\nFor example,\nif an API returns the field `errorMessage` with the value `Auth failed`,\nthen set this field to `errorMessage`."
+          ],
+          "examples": [
+            "error.message",
+            "`errorMessage`",
+            "`error`",
+            "`errors.0.message`"
+          ]
+        },
+        "failValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Values at `failPath` that indicate an auth failure.",
+          "examples": [
+            ["access_denied", "invalid_grant", "unauthorized_client"],
+            ["error", "invalid_request"]
+          ],
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Array of strings.\n- Values correspond to provider-specific error indicators in the response body.\n- Used programmatically to trigger failure callbacks or error messages.\n- May be integrated with logging and monitoring systems for authentication failures.",
+            "## IMPORTANT NOTES:\n- Failure values are critical for robust error handling in OAuth2 flows.\n- Missing or incorrect failValues may result in unhandled authentication errors.\n- Should be aligned with the OAuth2 specification and provider documentation.\n- Case sensitivity may matter depending on the OAuth2 provider's response.",
+            "## FIELD BEHAVIOR:\n- Array of one or more strings.\n- If any value matches the configured response body field, the response is treated as an auth failure.",
+            "## IMPLEMENTATION GUIDANCE:\n- Use exact values returned by the provider in the response body.\n- Provide each distinct value once (case sensitivity depends on the provider response).",
+            "## EXAMPLES:\n- [\"access_denied\", \"invalid_grant\", \"unauthorized_client\"]\n- [\"error\", \"invalid_request\"]",
+            "Use this field to limit the exact values in the configured HTTP response body\nfield that should be treated as authentication errors.",
+            "UI behavior: to provide multiple values, enter a comma-separated list;\nin the API/config, represent this as an array of strings.",
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth2 provider's error response definitions.\n- Works in conjunction with success and error handling mechanisms in the authentication flow.\n- Influences the overall OAuth2 authentication state management.",
+            "Use this field to limit the exact values in the configured HTTP response body\nfield that should be treated as authentication errors.",
+            "UI behavior: to provide multiple values, enter a comma-separated list;\nin the API/config, represent this as an array of strings.",
+            "Use this field to limit the exact values in the configured HTTP response body\nfield that should be treated as authentication errors.",
+            "UI behavior: to provide multiple values, enter a comma-separated list;\nin the API/config, represent this as an array of strings."
+          ]
+        },
+        "failStatusCode": {
+          "type": "number",
+          "description": "HTTP status code indicating an auth error, if the provider\nuses something other than 401.",
+          "x-celigo-ai-guidance": [
+            "## IMPLEMENTATION GUIDANCE:\n- Leave unset if auth errors are returned as `401` (default behavior).\n- Set this if auth failures are returned using another status code (e.g., `400`).",
+            "Set this field only if the system you are authenticating against uses an HTTP\nstatus code other than 401 to indicate an OAuth2 authentication error;\nfor example,\nan API may return a generic `400` status code and use a field in the HTTP\nresponse body to indicate authentication errors.",
+            "## IMPORTANT NOTES:\n- Setting an inappropriate status code may lead to client confusion or security risks.\n- Some clients or intermediaries may behave differently depending on the status code.\n- The status code should be accompanied by a descriptive error message in the response body.",
+            "## FIELD BEHAVIOR:\n- Determines the HTTP response status code sent upon OAuth2 failure.\n- Influences client-side error handling and user feedback.\n- Overrides default failure status codes if explicitly set.",
+            "## DEPENDENCY CHAIN:\n- Depends on OAuth2 authentication and authorization failure events.\n- Works in conjunction with error response payloads and headers.\n- May interact with logging and monitoring systems for failure tracking.",
+            "## TECHNICAL DETAILS:\n- Must be an integer within the range of valid HTTP status codes (100\u2013599).\n- Typically used in HTTP response status line.\n- Should be consistent with OAuth2 error response standards defined in RFC 6749.",
+            "## EXAMPLES:\n- 401\n- 400",
+            "Set this field only if the system you are authenticating against uses an HTTP\nstatus code other than 401 to indicate an OAuth2 authentication error;\nfor example,\nan API may return a generic `400` status code and use a field in the HTTP\nresponse body to indicate authentication errors.",
+            "Set this field only if the system you are authenticating against uses an HTTP\nstatus code other than 401 to indicate an OAuth2 authentication error;\nfor example,\nan API may return a generic `400` status code and use a field in the HTTP\nresponse body to indicate authentication errors."
+          ],
+          "examples": [403, 401, 400]
+        },
+        "useNewAuthFailSchema": {
+          "type": "boolean",
+          "readOnly": true,
+          "description": "Server-managed flag. Always `true` in current responses."
+        },
+        "failures": {
+          "type": "array",
+          "readOnly": true,
+          "description": "Server-computed auth-failure detection rules derived from\n`failPath`, `failValues`, and `failStatusCode`. Present\nonly when those fields are configured.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "statusCode": {
+                "type": "number",
+                "description": "HTTP status code triggering auth-failure detection."
+              },
+              "path": {
+                "type": "string",
+                "description": "Response body path checked for failure values."
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Values at `path` that indicate auth failure."
+              }
+            }
+          }
+        },
+        "pkceCodeChallengeMethod": {
+          "type": ["string", "null"],
+          "enum": ["plain", "s256"],
+          "x-enumDescriptions": {
+            "plain": "Code verifier sent as-is (use only when required by the provider).",
+            "s256": "SHA-256 hash of code verifier (recommended)."
+          },
+          "description": "PKCE code challenge method (RFC 7636).",
+          "x-celigo-ai-guidance": [
+            "PKCE code challenge method used for the OAuth 2.0 authorization code flow (RFC 7636).",
+            "## EXAMPLES:\n- `s256`\n- `plain`",
+            "## FIELD BEHAVIOR:\n- `s256` is recommended.\n- `plain` should only be used if required by the provider."
+          ]
+        },
+        "useIClientFields": {
+          "type": "boolean",
+          "description": "Use legacy iClient-specific fields instead of standard\nOAuth 2.0 fields. For backward compatibility only.",
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Overrides default OAuth2 client ID, secret, and token endpoint parameters with iClient equivalents.\n- May alter request payload structure during OAuth2 token exchanges.\n- Typically used in environments where legacy iClient authentication flows are required.",
+            "## DEPENDENCY CHAIN:\n- Depends on the presence of iClient-specific OAuth2 fields in the configuration.\n- Affects OAuth2 token request and refresh processes.",
+            "## EXAMPLES:\n- true: Use iClient-specific fields for OAuth2 authentication.\n- false: Use standard OAuth2 fields for authentication.",
+            "## IMPLEMENTATION GUIDANCE:\n- Enable this flag only if integrating with legacy systems requiring iClient fields.\n- Ensure that the corresponding iClient fields are properly configured when this is enabled.\n- Validate compatibility with the OAuth2 provider before enabling this option.",
+            "## IMPORTANT NOTES:\n- Enabling this may affect interoperability with modern OAuth2 providers.\n- This setting is primarily for backward compatibility and may be deprecated in future releases.\n- Misconfiguration can lead to authentication failures.",
+            "## FIELD BEHAVIOR:\n- When set to true, the system uses iClient-specific OAuth2 fields for authentication.\n- When set to false or omitted, the system defaults to standard OAuth2 fields.\n- Influences how client credentials and tokens are processed during OAuth2 flows.",
+            "Determines whether to utilize the legacy iClient-specific fields in the OAuth2\nconfiguration instead of the standard OAuth2 fields.\nThis option is typically used for backward compatibility with systems or\nintegrations that rely on the older iClient field structure.",
+            "Determines whether to utilize the legacy iClient-specific fields in the OAuth2\nconfiguration instead of the standard OAuth2 fields.\nThis option is typically used for backward compatibility with systems or\nintegrations that rely on the older iClient field structure.",
+            "Determines whether to utilize the legacy iClient-specific fields in the OAuth2\nconfiguration instead of the standard OAuth2 fields.\nThis option is typically used for backward compatibility with systems or\nintegrations that rely on the older iClient field structure."
+          ]
+        },
+        "username": {
+          "type": "string",
+          "description": "Username for the password grant type.\n\nRequired when grantType is password.",
+          "x-celigo-ai-guidance": [
+            "## IMPORTANT NOTES:\n- The username must correspond to a valid user account in the OAuth2 provider.\n- Incorrect usernames will result in authentication failure.\n- Should be handled securely to prevent exposure of sensitive user information.",
+            "The username used to authenticate the user within the OAuth2 authorization framework.\nThis value typically represents the unique identifier assigned to the user by\nthe authentication provider or system.\nIt is required when performing resource owner password credentials grant or\nother flows that involve direct user authentication.",
+            "## EXAMPLES:\n- \"johndoe\"\n- \"user@example.com\"\n- \"alice123\"",
+            "## TECHNICAL DETAILS:\n- Data type: string\n- Maximum length may vary depending on the OAuth2 provider.\n- Should be URL-encoded if included in query parameters or request bodies.",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the username is securely transmitted over HTTPS to protect user credentials.\n- Validate the format and existence of the username before processing authentication.\n- Avoid logging the username in plain text to maintain user privacy.\n- Support international characters if the authentication system allows.",
+            "## FIELD BEHAVIOR:\n- Must be a non-empty string representing the user's login identifier.\n- Used in conjunction with the password to obtain an access token.\n- Should be case-sensitive depending on the authentication system.\n- Validated against the authentication provider's user database.",
+            "## DEPENDENCY CHAIN:\n- Typically used alongside the `password` property in OAuth2 password grant flows.\n- Dependent on the OAuth2 server's user management and authentication mechanisms.",
+            "The username used to authenticate the user within the OAuth2 authorization framework.\nThis value typically represents the unique identifier assigned to the user by\nthe authentication provider or system.\nIt is required when performing resource owner password credentials grant or\nother flows that involve direct user authentication.",
+            "The username used to authenticate the user within the OAuth2 authorization framework.\nThis value typically represents the unique identifier assigned to the user by\nthe authentication provider or system.\nIt is required when performing resource owner password credentials grant or\nother flows that involve direct user authentication."
+          ],
+          "examples": [
+            "service-account@example.com",
+            "johndoe",
+            "user@example.com",
+            "alice123"
+          ]
+        },
+        "password": {
+          "type": "string",
+          "description": "Password for the password grant type. Returned masked\nas `\"******\"`. Re-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "Use `password` for the OAuth2 password value used with the password grant;\nthis is the value provided to configure or update the iClient,\nis stored encrypted at rest internally in integrator.io (for example as\n`password_crypt`/`password_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a password is already set.",
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plain password value here to set/update it.\n- To keep the existing password unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "Use `password` for the OAuth2 password value used with the password grant;\nthis is the value provided to configure or update the iClient,\nis stored encrypted at rest internally in integrator.io (for example as\n`password_crypt`/`password_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a password is already set.",
+            "Use `password` for the OAuth2 password value used with the password grant;\nthis is the value provided to configure or update the iClient,\nis stored encrypted at rest internally in integrator.io (for example as\n`password_crypt`/`password_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a password is already set."
+          ]
+        },
+        "auth": {
+          "type": "object",
+          "description": "Authorization endpoint configuration.",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- Client credentials flow with client ID and client secret.\n- Authorization code flow with redirect URI and scopes.\n- Password grant with username and password fields.\n- Refresh token usage for renewing access tokens.",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure all required fields for the chosen OAuth 2.0 flow are included.\n- Securely store sensitive information like client secrets.\n- Validate the format and correctness of URLs and credentials.\n- Support common grant types such as authorization code, client credentials, and password.\n- Handle token expiration and refresh logic as needed.",
+            "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 grant type specified elsewhere in the configuration.\n- Interacts with token endpoint URLs and scope definitions.\n- May be linked to client application registration details.",
+            "## TECHNICAL DETAILS:\n- Typically includes fields such as client_id, client_secret, token_url, scopes, grant_type.\n- May require encoding or encryption of credentials during transmission.\n- Supports standard OAuth 2.0 token request and response formats.\n- Should handle HTTP status codes and error responses from the authorization server.",
+            "## FIELD BEHAVIOR:\n- Determines the authentication flow used in the OAuth 2.0 process.\n- Controls how credentials are presented to the authorization server.\n- Influences token acquisition and refresh mechanisms.\n- May include multiple authentication parameters depending on the grant type.",
+            "## IMPORTANT NOTES:\n- Sensitive data must be protected and not exposed in logs or error messages.\n- The authentication method must comply with OAuth 2.0 standards.\n- Misconfiguration can lead to failed authentication or security vulnerabilities.\n- Different OAuth 2.0 providers may require specific parameters or formats.",
+            "Specifies the authentication method and credentials required for OAuth 2.0 authorization.\nThis property defines how the client should authenticate with the authorization\nserver to obtain an access token.\nIt typically includes details such as client ID, client secret, token endpoint,\nscopes, and grant type.",
+            "Specifies the authentication method and credentials required for OAuth 2.0 authorization.\nThis property defines how the client should authenticate with the authorization\nserver to obtain an access token.\nIt typically includes details such as client ID, client secret, token endpoint,\nscopes, and grant type.",
+            "Specifies the authentication method and credentials required for OAuth 2.0 authorization.\nThis property defines how the client should authenticate with the authorization\nserver to obtain an access token.\nIt typically includes details such as client ID, client secret, token endpoint,\nscopes, and grant type."
+          ],
+          "properties": {
+            "uri": {
+              "type": "string",
+              "description": "Authorization endpoint URI.",
+              "x-celigo-ai-guidance": [
+                "The URI endpoint where the OAuth 2.0 authorization server accepts authorization requests.\nThis URI is used by clients to initiate the authorization flow,\ntypically by redirecting the resource owner's user-agent to this address.\nIt must be a valid HTTPS URL to ensure secure transmission of sensitive\ninformation such as authorization codes or tokens.",
+                "## IMPORTANT NOTES:\n- The URI must be registered with the OAuth 2.0 provider and match the client configuration.\n- Using HTTP instead of HTTPS is not recommended due to security risks.\n- The URI should be stable and not change frequently to avoid client misconfigurations.\n- This endpoint is distinct from the token endpoint used to exchange authorization codes for tokens.",
+                "## EXAMPLES:\n- https://authorization-server.com/oauth2/authorize\n- https://accounts.example.com/auth\n- https://login.provider.com/oauth2/auth",
+                "## FIELD BEHAVIOR:\n- Serves as the entry point for the OAuth 2.0 authorization process.\n- Used by clients to request authorization from the resource owner.\n- Typically involves redirection of the user's browser to this URI.\n- Must support standard OAuth 2.0 authorization request parameters.",
+                "## DEPENDENCY CHAIN:\n- Dependent on the OAuth 2.0 client configuration specifying this URI.\n- Used in conjunction with client_id, redirect_uri, response_type, and scope parameters.\n- Works alongside the token endpoint URI for completing the OAuth flow.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure the URI is an HTTPS endpoint to maintain security.\n- The endpoint should conform to OAuth 2.0 specifications for authorization endpoints.\n- Validate that the URI is reachable and correctly configured to handle authorization requests.\n- Include necessary query parameters as per OAuth 2.0 standards during requests.",
+                "## TECHNICAL DETAILS:\n- Must be a valid, well-formed URL.\n- Should support GET requests with query parameters for authorization requests.\n- Typically responds with redirects (HTTP 302) to the redirect_uri with authorization codes or tokens.\n- Should implement security best practices such as TLS 1.2+ and proper CORS policies.",
+                "The URI endpoint where the OAuth 2.0 authorization server accepts authorization requests.\nThis URI is used by clients to initiate the authorization flow,\ntypically by redirecting the resource owner's user-agent to this address.\nIt must be a valid HTTPS URL to ensure secure transmission of sensitive\ninformation such as authorization codes or tokens.",
+                "The URI endpoint where the OAuth 2.0 authorization server accepts authorization requests.\nThis URI is used by clients to initiate the authorization flow,\ntypically by redirecting the resource owner's user-agent to this address.\nIt must be a valid HTTPS URL to ensure secure transmission of sensitive\ninformation such as authorization codes or tokens."
+              ],
+              "examples": [
+                "https://accounts.google.com/o/oauth2/auth",
+                "https://authorization-server.com/oauth2/authorize",
+                "https://accounts.example.com/auth",
+                "https://login.provider.com/oauth2/auth"
+              ]
+            },
+            "queryParameters": {
+              "type": "object",
+              "description": "Additional query parameters appended to the authorization\nURL. Stored encrypted (masked as `\"****\"` in responses)."
+            }
+          }
+        },
+        "token": {
+          "type": "object",
+          "description": "Token endpoint configuration.",
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Usually a string encoded in JWT or opaque format.\n- Contains claims or metadata about the user and permissions.\n- Includes an expiration timestamp (exp claim in JWT).\n- May include scopes defining access rights.\n- Must conform to OAuth 2.0 and OpenID Connect standards where applicable.",
+            "## FIELD BEHAVIOR:\n- Represents the credential used to access protected resources.\n- Must be included in API requests to authenticate the client.\n- Has an expiration time after which it becomes invalid.\n- May be a JWT or opaque string depending on the authorization server.\n- Should be securely stored and transmitted only over HTTPS.",
+            "## EXAMPLES:\n- \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n- \"2YotnFZFEjr1zCsicMWpAA\"\n- \"mF_9.B5f-4.1JqM\"",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the token is included in the Authorization header as \"Bearer {token}\".\n- Validate the token's expiration and scope before use.\n- Refresh the token using a refresh token if supported and expired.\n- Handle token revocation and errors gracefully.\n- Avoid logging or exposing the token in client-side code or URLs.",
+            "## IMPORTANT NOTES:\n- The token must be kept confidential to prevent unauthorized access.\n- Tokens are typically short-lived to enhance security.\n- Different APIs may require tokens with specific scopes or claims.\n- Always use secure transport (HTTPS) when transmitting tokens.",
+            "## DEPENDENCY CHAIN:\n- Obtained after successful OAuth 2.0 authorization or token exchange.\n- May depend on client credentials, authorization code, or refresh token.\n- Used in conjunction with the Authorization header in API requests.",
+            "The access token issued by the OAuth 2.0 authorization server,\nused to authenticate and authorize API requests on behalf of the user or client.\nThis token is typically a string representing a bearer token that must be\nincluded in the Authorization header of HTTP requests to access protected\nresources.\nIt has a limited lifetime and scope,\ndefining the permissions granted to the client.",
+            "The access token issued by the OAuth 2.0 authorization server,\nused to authenticate and authorize API requests on behalf of the user or client.\nThis token is typically a string representing a bearer token that must be\nincluded in the Authorization header of HTTP requests to access protected\nresources.\nIt has a limited lifetime and scope,\ndefining the permissions granted to the client.",
+            "The access token issued by the OAuth 2.0 authorization server,\nused to authenticate and authorize API requests on behalf of the user or client.\nThis token is typically a string representing a bearer token that must be\nincluded in the Authorization header of HTTP requests to access protected\nresources.\nIt has a limited lifetime and scope,\ndefining the permissions granted to the client."
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET", "POST"],
+              "x-enumDescriptions": {
+                "GET": "Token request sent as query parameters in a GET request; may expose sensitive data in URLs and logs",
+                "POST": "Token request sent as form data in a POST request; most common and recommended"
+              },
+              "description": "HTTP method for the token request.",
+              "x-celigo-ai-guidance": [
+                "HTTP method used to call the OAuth 2.0 token endpoint."
+              ]
+            },
+            "uri": {
+              "type": "string",
+              "description": "Token endpoint URI.",
+              "x-celigo-ai-guidance": [
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure the URI is a fully qualified HTTPS URL to maintain security.\n- Confirm the endpoint supports the OAuth 2.0 token exchange specification.\n- Validate the URI format before use to prevent runtime errors.\n- Document any additional headers or parameters required by the token endpoint.",
+                "## FIELD BEHAVIOR:\n- Defines the exact URL to which token requests are made during the OAuth 2.0 flow.\n- Used by clients to exchange authorization grants or refresh tokens for access tokens.\n- Must support the OAuth 2.0 token request parameters and response formats.\n- Typically accessed via HTTP POST requests.",
+                "The URI (Uniform Resource Identifier) specifying the endpoint where the OAuth\n2.0 token request is sent to obtain an access token.\nThis endpoint is responsible for authenticating the client and issuing tokens\naccording to the OAuth 2.0 protocol.\nIt must be a valid HTTPS URL to ensure secure transmission of sensitive credentials and tokens.",
+                "## TECHNICAL DETAILS:\n- Must conform to URI syntax as per RFC 3986.\n- Typically accessed using HTTP POST with content type application/x-www-form-urlencoded.\n- Responses are usually JSON objects containing access tokens and metadata.\n- May support additional OAuth 2.0 extensions like PKCE or client authentication methods.",
+                "## DEPENDENCY CHAIN:\n- Dependent on the OAuth 2.0 authorization server configuration.\n- Used in conjunction with client credentials and grant types.\n- Related to other OAuth 2.0 endpoints such as authorization URI and revocation URI.",
+                "## IMPORTANT NOTES:\n- The URI must be reachable and responsive to token requests.\n- Using HTTP instead of HTTPS is discouraged due to security risks.\n- The token endpoint may require client authentication via headers or request body.\n- Changes to this URI can disrupt the OAuth 2.0 authentication flow.",
+                "## EXAMPLES:\n- https://auth.example.com/oauth2/token\n- https://login.provider.com/oauth2/v1/token\n- https://api.service.com/oauth/token",
+                "The URI (Uniform Resource Identifier) specifying the endpoint where the OAuth\n2.0 token request is sent to obtain an access token.\nThis endpoint is responsible for authenticating the client and issuing tokens\naccording to the OAuth 2.0 protocol.\nIt must be a valid HTTPS URL to ensure secure transmission of sensitive credentials and tokens.",
+                "The URI (Uniform Resource Identifier) specifying the endpoint where the OAuth\n2.0 token request is sent to obtain an access token.\nThis endpoint is responsible for authenticating the client and issuing tokens\naccording to the OAuth 2.0 protocol.\nIt must be a valid HTTPS URL to ensure secure transmission of sensitive credentials and tokens."
+              ],
+              "examples": [
+                "https://accounts.google.com/o/oauth2/token",
+                "https://auth.example.com/oauth2/token",
+                "https://login.provider.com/oauth2/v1/token",
+                "https://api.service.com/oauth/token"
+              ]
+            },
+            "body": {
+              "type": "string",
+              "description": "Custom request body template for the token request.\nSupports Handlebars expressions.",
+              "x-celigo-ai-guidance": [
+                "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 grant type selected.\n- Relies on correct client credentials and authorization codes obtained from prior steps.\n- Works in conjunction with HTTP headers like Content-Type and Authorization.",
+                "## TECHNICAL DETAILS:\n- Typically sent as application/x-www-form-urlencoded or application/json.\n- Must be included in the POST request to the token endpoint URL.\n- Parameters are case-sensitive and must match the OAuth 2.0 specification.\n- The server response depends on the correctness and completeness of the body content.",
+                "## FIELD BEHAVIOR:\n- Contains the data sent in the HTTP request body during the token request.\n- Must include all required parameters based on the OAuth 2.0 grant type being used.\n- Often formatted as application/x-www-form-urlencoded or JSON, depending on the API requirements.\n- Is transmitted securely over HTTPS to protect sensitive information.",
+                "## EXAMPLES:\n- grant_type=authorization_code&code=AUTH_CODE&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcallback&client_id=CLIENT_ID&client_secret=CLIENT_SECRET\n- { \"grant_type\": \"refresh_token\", \"refresh_token\": \"REFRESH_TOKEN\", \"client_id\": \"CLIENT_ID\" }",
+                "The body property represents the payload content sent in the HTTP request when\nobtaining an OAuth 2.0 token.\nIt typically includes key-value pairs such as grant type, client credentials,\nauthorization code, refresh token, and scope,\nformatted according to the OAuth 2.0 specification.\nThis property is essential for conveying the necessary parameters to the token\nendpoint to successfully authenticate and receive an access token.",
+                "## IMPORTANT NOTES:\n- The exact parameters required in the body depend on the OAuth 2.0 flow implemented (authorization code, client credentials, password, refresh token).\n- Sensitive information such as client_secret should be handled securely and never exposed in logs or client-side code.\n- The body must conform to the OAuth 2.0 specification and the authorization server's expectations.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure the body includes all mandatory fields such as grant_type, client_id, client_secret, code, redirect_uri, or refresh_token as applicable.\n- Use the correct content type header matching the body format.\n- Encode parameters properly to comply with URL encoding standards if using form-urlencoded format.\n- Validate the body content before sending to avoid malformed requests.",
+                "The body property represents the payload content sent in the HTTP request when\nobtaining an OAuth 2.0 token.\nIt typically includes key-value pairs such as grant type, client credentials,\nauthorization code, refresh token, and scope,\nformatted according to the OAuth 2.0 specification.\nThis property is essential for conveying the necessary parameters to the token\nendpoint to successfully authenticate and receive an access token.",
+                "The body property represents the payload content sent in the HTTP request when\nobtaining an OAuth 2.0 token.\nIt typically includes key-value pairs such as grant type, client credentials,\nauthorization code, refresh token, and scope,\nformatted according to the OAuth 2.0 specification.\nThis property is essential for conveying the necessary parameters to the token\nendpoint to successfully authenticate and receive an access token."
+              ],
+              "examples": [
+                "grant_type=client_credentials&client_id={{{iClient.oauth2.clientId}}}",
+                "grant_type=authorization_code&code=AUTH_CODE&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcallback&client_id=CLIENT_ID&client_secret=CLIENT_SECRET"
+              ]
+            },
+            "headers": {
+              "description": "Custom HTTP headers for the token request. Can be an\narray of `{name, value}` objects or a string.",
+              "x-celigo-ai-guidance": [
+                "A collection of HTTP headers to include in the token request when obtaining an\nOAuth 2.0 access token.\nThese headers allow customization of the request, such as setting content types,\nauthorization credentials, or custom metadata required by the token endpoint.\nThe headers should be specified as key-value pairs where the key is the header\nname and the value is the header content.",
+                "## DEPENDENCY CHAIN:\n- Used in conjunction with oauth2.token.url and oauth2.token.body parameters.\n- May depend on client credentials or other authentication parameters.\n- Influences the HTTP request sent to the OAuth token endpoint.",
+                "## FIELD BEHAVIOR:\n- Overrides or supplements default headers sent in the token request.\n- Supports multiple headers to be included simultaneously.\n- Headers are sent exactly as specified without modification.\n- Used primarily during the OAuth 2.0 token exchange process.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure header names are correctly capitalized as per HTTP standards.\n- Avoid including sensitive information unless required and secure.\n- Validate header values to conform to expected formats (e.g., content-type).\n- Use this field to add custom headers required by specific OAuth providers.",
+                "## IMPORTANT NOTES:\n- Headers specified here apply only to the token request, not to other OAuth flows.\n- Conflicts with default headers may cause token request failures.\n- Sensitive headers should be handled securely to prevent leaks.\n- Some OAuth providers may require specific headers for successful authentication.",
+                "## TECHNICAL DETAILS:\n- Represented as a map/dictionary of string keys and string values.\n- Transmitted as HTTP headers in the token request POST or GET.\n- Supports standard HTTP header syntax and conventions.\n- Must comply with OAuth 2.0 token endpoint requirements and HTTP protocol.",
+                "## EXAMPLES:\n- Authorization: Basic base64(client_id:client_secret)\n- Content-Type: application/x-www-form-urlencoded\n- Custom-Header: customValue",
+                "A collection of HTTP headers to include in the token request when obtaining an\nOAuth 2.0 access token.\nThese headers allow customization of the request, such as setting content types,\nauthorization credentials, or custom metadata required by the token endpoint.\nThe headers should be specified as key-value pairs where the key is the header\nname and the value is the header content.",
+                "A collection of HTTP headers to include in the token request when obtaining an\nOAuth 2.0 access token.\nThese headers allow customization of the request, such as setting content types,\nauthorization credentials, or custom metadata required by the token endpoint.\nThe headers should be specified as key-value pairs where the key is the header\nname and the value is the header content."
+              ],
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the HTTP header to send.",
+                        "examples": ["Content-Type"]
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Value of the HTTP header to send.",
+                        "examples": ["application/x-www-form-urlencoded"]
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "refresh": {
+          "type": "object",
+          "description": "Refresh token endpoint configuration.",
+          "x-celigo-ai-guidance": [
+            "Indicates whether the OAuth2 refresh token flow is supported/enabled.",
+            "## EXAMPLES:\n- `true`\n- `false`"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["GET", "POST"],
+              "x-enumDescriptions": {
+                "GET": "Refresh request sent as query parameters in a GET request.",
+                "POST": "Refresh request sent as form data in a POST request (recommended)."
+              },
+              "description": "HTTP method for the refresh token request.",
+              "examples": ["POST", "GET"],
+              "x-celigo-ai-guidance": [
+                "## IMPLEMENTATION GUIDANCE:\n- Typically set to POST for secure transmission of sensitive data.\n- Ensure the chosen method aligns with the OAuth 2.0 server's requirements.\n- Validate that the client library or HTTP client supports the specified method.\n- Consider security implications of using GET, as parameters may be exposed in URLs.",
+                "## EXAMPLES:\n- POST\n- GET",
+                "## IMPORTANT NOTES:\n- Using GET may expose refresh tokens in URLs, which can be logged or cached.\n- Some OAuth 2.0 servers may only support POST for token refresh requests.\n- The method must be consistent with the server's expected protocol to avoid errors.",
+                "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 server's token endpoint configuration.\n- Interacts with the refresh token and client credentials parameters.\n- Influences the HTTP headers and body formatting of the request.",
+                "Specifies the HTTP method to be used when making the refresh token request in\nthe OAuth 2.0 authentication flow.\nThis method determines how the refresh token and related parameters are sent to\nthe authorization server to obtain a new access token.\nCommon HTTP methods include POST and GET,\nwith POST being the most widely used due to its ability to securely transmit\ndata in the request body.",
+                "## FIELD BEHAVIOR:\n- Defines the HTTP verb for the token refresh request.\n- Influences how parameters are encoded and transmitted.\n- Affects compatibility with different OAuth 2.0 server implementations.",
+                "## TECHNICAL DETAILS:\n- HTTP methods are case-insensitive but typically uppercase.\n- POST requests send parameters in the request body using application/x-www-form-urlencoded format.\n- GET requests send parameters as URL query parameters.\n- Proper handling of HTTP status codes and responses is required based on the method used.",
+                "Specifies the HTTP method to be used when making the refresh token request in\nthe OAuth 2.0 authentication flow.\nThis method determines how the refresh token and related parameters are sent to\nthe authorization server to obtain a new access token.\nCommon HTTP methods include POST and GET,\nwith POST being the most widely used due to its ability to securely transmit\ndata in the request body.",
+                "Specifies the HTTP method to be used when making the refresh token request in\nthe OAuth 2.0 authentication flow.\nThis method determines how the refresh token and related parameters are sent to\nthe authorization server to obtain a new access token.\nCommon HTTP methods include POST and GET,\nwith POST being the most widely used due to its ability to securely transmit\ndata in the request body."
+              ]
+            },
+            "uri": {
+              "type": "string",
+              "description": "Refresh token endpoint URI.",
+              "x-celigo-ai-guidance": [
+                "Refresh token endpoint URI used to exchange a refresh token for a new access\ntoken (RFC 6749 Section 6).",
+                "## EXAMPLES:\n- https://auth.example.com/oauth2/token\n- https://login.provider.com/oauth2/v1/token",
+                "Refresh token endpoint URI used to exchange a refresh token for a new access\ntoken (RFC 6749 Section 6).",
+                "Refresh token endpoint URI used to exchange a refresh token for a new access\ntoken (RFC 6749 Section 6)."
+              ],
+              "examples": [
+                "https://accounts.google.com/o/oauth2/token",
+                "https://auth.example.com/oauth2/token",
+                "https://login.provider.com/oauth2/v1/token"
+              ]
+            },
+            "body": {
+              "type": "string",
+              "description": "Custom request body template for the refresh request.\nSupports Handlebars expressions.",
+              "x-celigo-ai-guidance": [
+                "The body of the HTTP request used to refresh an OAuth 2.0 access token.\nThis typically includes parameters such as the refresh token,\nclient credentials, grant type,\nand any additional required fields as specified by the OAuth 2.0 protocol.\nThe body must be formatted according to the content type expected by the authorization server,\ncommonly application/x-www-form-urlencoded.",
+                "## EXAMPLES:\n- grant_type=refresh_token&refresh_token=xyz123&client_id=abc&client_secret=secret\n- grant_type=refresh_token&refresh_token=def456",
+                "## FIELD BEHAVIOR:\n- Contains all necessary parameters to request a new access token using a refresh token.\n- Must include the \"grant_type\" parameter set to \"refresh_token\".\n- Should include the \"refresh_token\" parameter with the valid refresh token value.\n- May include client authentication parameters such as \"client_id\" and \"client_secret\" if required.\n- Sent as the payload of the HTTP POST request to the token endpoint.",
+                "## IMPORTANT NOTES:\n- The refresh token must be valid and not expired or revoked.\n- The authorization server may require client authentication in the body or via other means.\n- The content type header must match the format of the body (e.g., application/x-www-form-urlencoded).\n- Improper formatting or missing parameters will result in an error response from the server.",
+                "## TECHNICAL DETAILS:\n- Typically sent as an HTTP POST request body.\n- Commonly uses application/x-www-form-urlencoded encoding.\n- Parameters include \"grant_type\", \"refresh_token\", and optionally \"client_id\" and \"client_secret\".\n- Must comply with OAuth 2.0 RFC 6749 Section 6 for token refresh requests.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure the body is properly URL-encoded if using application/x-www-form-urlencoded content type.\n- Validate that all required parameters are present before sending the request.\n- Follow the OAuth 2.0 specification (RFC 6749) for the exact parameter names and values.\n- Handle any additional parameters required by the specific OAuth provider.\n- Securely handle sensitive information such as client secrets and refresh tokens.",
+                "## DEPENDENCY CHAIN:\n- Depends on having a valid refresh token obtained from a previous authorization.\n- Requires knowledge of the OAuth 2.0 token endpoint URL.\n- May depend on client credentials if the server requires client authentication.\n- Relies on the correct grant_type parameter to indicate a refresh token request.",
+                "The body of the HTTP request used to refresh an OAuth 2.0 access token.\nThis typically includes parameters such as the refresh token,\nclient credentials, grant type,\nand any additional required fields as specified by the OAuth 2.0 protocol.\nThe body must be formatted according to the content type expected by the authorization server,\ncommonly application/x-www-form-urlencoded.",
+                "The body of the HTTP request used to refresh an OAuth 2.0 access token.\nThis typically includes parameters such as the refresh token,\nclient credentials, grant type,\nand any additional required fields as specified by the OAuth 2.0 protocol.\nThe body must be formatted according to the content type expected by the authorization server,\ncommonly application/x-www-form-urlencoded."
+              ],
+              "examples": [
+                "grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}",
+                "grant_type=refresh_token&refresh_token=xyz123&client_id=abc&client_secret=secret",
+                "grant_type=refresh_token&refresh_token=def456"
+              ]
+            },
+            "headers": {
+              "description": "Custom HTTP headers for the refresh token request.\nCan be an array of `{name, value}` objects or a string.",
+              "x-celigo-ai-guidance": [
+                "## TECHNICAL DETAILS:\n- Represented as a map/dictionary of string keys and string values.\n- Translated into HTTP headers in the outgoing POST request to the token endpoint.\n- Must comply with HTTP/1.1 header field syntax and encoding rules.\n- Typically sent over HTTPS to ensure confidentiality and integrity.",
+                "## FIELD BEHAVIOR:\n- Accepts key-value pairs representing HTTP header names and their corresponding values.\n- Headers are included in the HTTP request sent to the token endpoint during the refresh token flow.\n- Overrides or supplements default headers set by the client or HTTP library.\n- Supports standard and custom headers as required by the OAuth 2.0 provider.",
+                "A collection of HTTP headers to include in the OAuth 2.0 refresh token request.\nThese headers can be used to pass additional metadata,\nauthentication information,\nor custom parameters required by the authorization server during the token refresh process.\nTypically, this may include headers such as `Content-Type`, `Authorization`,\nor any other custom headers mandated by the API specification.",
+                "## EXAMPLES:\n- `Content-Type: application/x-www-form-urlencoded`\n- `Authorization: Basic base64(client_id:client_secret)`\n- `Custom-Header: customValue`",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure header names are correctly capitalized and conform to HTTP standards.\n- Avoid including sensitive information in headers unless required and secured.\n- Validate header values to prevent injection or formatting errors.\n- Use this field to add headers like `Authorization` if the token endpoint requires client authentication via headers.\n- Do not duplicate headers that are automatically managed by the HTTP client unless overriding is necessary.",
+                "## IMPORTANT NOTES:\n- Headers specified here apply only to the refresh token request, not to other OAuth 2.0 flows.\n- Misconfigured headers can cause token refresh failures or security issues.\n- Some OAuth 2.0 servers require specific headers for token refresh requests; consult the provider's documentation.\n- Sensitive headers should be handled securely to prevent exposure.",
+                "## DEPENDENCY CHAIN:\n- Used in conjunction with `oauth2.refresh.tokenUrl` to make the refresh token request.\n- May depend on client authentication method specified elsewhere in the OAuth 2.0 configuration.\n- Interacts with HTTP client settings that manage default headers.",
+                "A collection of HTTP headers to include in the OAuth 2.0 refresh token request.\nThese headers can be used to pass additional metadata,\nauthentication information,\nor custom parameters required by the authorization server during the token refresh process.\nTypically, this may include headers such as `Content-Type`, `Authorization`,\nor any other custom headers mandated by the API specification.",
+                "A collection of HTTP headers to include in the OAuth 2.0 refresh token request.\nThese headers can be used to pass additional metadata,\nauthentication information,\nor custom parameters required by the authorization server during the token refresh process.\nTypically, this may include headers such as `Content-Type`, `Authorization`,\nor any other custom headers mandated by the API specification."
+              ],
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the HTTP header to send.",
+                        "examples": ["Content-Type"]
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Value of the HTTP header to send.",
+                        "examples": ["application/x-www-form-urlencoded"]
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "revoke": {
+          "type": "object",
+          "description": "Token revocation endpoint configuration (RFC 7009).",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- `true`\n- `false`",
+            "Indicates whether the OAuth2 token revocation endpoint is supported/enabled (RFC 7009)."
+          ],
+          "properties": {
+            "uri": {
+              "type": "string",
+              "description": "Revocation endpoint URI.",
+              "x-celigo-ai-guidance": [
+                "## IMPORTANT NOTES:\n- The revocation URI is distinct from the authorization and token endpoints.\n- Proper implementation of token revocation enhances security by allowing clients to invalidate tokens when no longer needed.\n- Failure to provide a valid revocation URI may prevent clients from properly revoking tokens.",
+                "## FIELD BEHAVIOR:\n- Accepts a single string value representing the revocation endpoint URL.\n- Used by clients to send HTTP POST requests to revoke tokens.\n- Should support standard OAuth 2.0 token revocation parameters as per RFC 7009.\n- Must be reachable and respond appropriately to revocation requests.",
+                "The URI endpoint where OAuth 2.0 token revocation requests are sent.\nThis URI is used by clients to invalidate access or refresh tokens,\nensuring they can no longer be used for authentication or authorization.\nIt must be a valid HTTPS URL to guarantee secure transmission of sensitive token data.",
+                "## TECHNICAL DETAILS:\n- Typically accessed via HTTP POST with parameters such as token and token_type_hint.\n- Must handle authentication of the client making the revocation request.\n- Should return appropriate HTTP status codes indicating success or failure of revocation.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure the URI uses HTTPS to protect token data during transmission.\n- The endpoint should conform to OAuth 2.0 Token Revocation specification (RFC 7009).\n- Validate the URI format to prevent misconfiguration.\n- Document any additional headers or authentication required by the revocation endpoint.",
+                "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 authorization server configuration.\n- Related to the OAuth 2.0 token endpoint and authorization endpoint.\n- Used in conjunction with client credentials and tokens issued by the authorization server.",
+                "## EXAMPLES:\n- https://auth.example.com/oauth2/revoke\n- https://api.service.com/oauth2/token/revoke",
+                "The URI endpoint where OAuth 2.0 token revocation requests are sent.\nThis URI is used by clients to invalidate access or refresh tokens,\nensuring they can no longer be used for authentication or authorization.\nIt must be a valid HTTPS URL to guarantee secure transmission of sensitive token data.",
+                "The URI endpoint where OAuth 2.0 token revocation requests are sent.\nThis URI is used by clients to invalidate access or refresh tokens,\nensuring they can no longer be used for authentication or authorization.\nIt must be a valid HTTPS URL to guarantee secure transmission of sensitive token data."
+              ],
+              "examples": [
+                "https://accounts.google.com/o/oauth2/revoke",
+                "https://auth.example.com/oauth2/revoke",
+                "https://api.service.com/oauth2/token/revoke"
+              ]
+            },
+            "body": {
+              "type": "string",
+              "description": "Custom request body for the revocation request.",
+              "x-celigo-ai-guidance": [
+                "The request body containing the parameters required to revoke an OAuth 2.0 token.\nThis typically includes the token to be revoked and may also specify the token\ntype hint to indicate whether the token is an access token or a refresh token.\nThe body must be formatted according to the application/x-www-form-urlencoded\nMIME type as per the OAuth 2.0 Token Revocation specification (RFC 7009).",
+                "## IMPORTANT NOTES:\n- The token parameter is mandatory; omission will result in an error.\n- The token_type_hint is optional but recommended to improve server processing.\n- Revocation requests must be authenticated as per the authorization server's requirements.\n- Revoking a token invalidates it immediately, preventing further use.\n- The body must not contain any additional parameters beyond those defined by the specification.",
+                "## DEPENDENCY CHAIN:\n- Depends on the OAuth 2.0 token revocation endpoint being correctly configured.\n- Requires the client to have a valid token to revoke.\n- May depend on client authentication credentials included in the request headers.\n- The server's response depends on the correctness of the body parameters.",
+                "## TECHNICAL DETAILS:\n- Content-Type: application/x-www-form-urlencoded\n- Encoding: URL-encoded key-value pairs\n- Parameters:\n  - token (string, required): The token to be revoked.\n  - token_type_hint (string, optional): A hint about the type of the token.\n- HTTP Method: POST\n- Conforms to RFC 7009 (OAuth 2.0 Token Revocation)",
+                "## EXAMPLES:\n- token=SlAV32hkKG\n- token=34xkj23j4k23&token_type_hint=refresh_token\n- token=abcdef123456&token_type_hint=access_token",
+                "## FIELD BEHAVIOR:\n- Contains key-value pairs representing the token and optional token type hint.\n- Must be included in the HTTP POST request to the token revocation endpoint.\n- Parameters are URL-encoded in the request body.\n- Used to instruct the authorization server to invalidate a specific token.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure the body includes the \"token\" parameter with the token string to revoke.\n- Optionally include \"token_type_hint\" with values like \"access_token\" or \"refresh_token\" to assist the server.\n- Use application/x-www-form-urlencoded content type for the request.\n- Validate that the token parameter is present and correctly formatted before sending.\n- Handle server responses to confirm successful revocation or errors.",
+                "The request body containing the parameters required to revoke an OAuth 2.0 token.\nThis typically includes the token to be revoked and may also specify the token\ntype hint to indicate whether the token is an access token or a refresh token.\nThe body must be formatted according to the application/x-www-form-urlencoded\nMIME type as per the OAuth 2.0 Token Revocation specification (RFC 7009).",
+                "The request body containing the parameters required to revoke an OAuth 2.0 token.\nThis typically includes the token to be revoked and may also specify the token\ntype hint to indicate whether the token is an access token or a refresh token.\nThe body must be formatted according to the application/x-www-form-urlencoded\nMIME type as per the OAuth 2.0 Token Revocation specification (RFC 7009)."
+              ],
+              "examples": [
+                "token={{{iClient.oauth2.accessToken}}}",
+                "token=SlAV32hkKG",
+                "token=34xkj23j4k23&token_type_hint=refresh_token",
+                "token=abcdef123456&token_type_hint=access_token"
+              ]
+            },
+            "headers": {
+              "description": "Custom HTTP headers for the revocation request.\nCan be an array of `{name, value}` objects or a string.",
+              "x-celigo-ai-guidance": [
+                "## FIELD BEHAVIOR:\n- Accepts key-value pairs representing HTTP header names and their corresponding values.\n- Headers are included in the HTTP request sent to the token revocation endpoint.\n- Can override default headers or add custom headers as needed.\n- Supports standard headers like `Authorization`, `Content-Type`, and custom headers.",
+                "## DEPENDENCY CHAIN:\n- Used in conjunction with the `oauth2.revoke.url` property specifying the revocation endpoint.\n- May depend on `oauth2.revoke.method` to determine the HTTP method used.\n- Works alongside other OAuth 2.0 configuration properties to complete the revocation flow.",
+                "## TECHNICAL DETAILS:\n- Represented as a map or dictionary of string key-value pairs.\n- Incorporated into the HTTP request headers when making the revocation call.\n- Must comply with HTTP header syntax and encoding rules.\n- Typically used in HTTP POST requests to the revocation endpoint.",
+                "## IMPORTANT NOTES:\n- Headers specified here will be sent only during the token revocation request.\n- Misconfigured headers may cause the revocation request to fail.\n- This field does not affect other OAuth 2.0 requests such as token acquisition or introspection.",
+                "A collection of HTTP headers to include in the token revocation request for OAuth 2.0.\nThese headers can be used to specify additional metadata such as content type,\nauthorization credentials, custom client information,\nor any other required HTTP headers that the revocation endpoint expects.\nThis allows for greater flexibility and control over the HTTP request sent to\nthe authorization server when revoking tokens.",
+                "## IMPLEMENTATION GUIDANCE:\n- Ensure header names are correctly capitalized and conform to HTTP standards.\n- Avoid including sensitive information in headers unless required and secure.\n- Validate header values to prevent injection or formatting errors.\n- Use this field to comply with specific OAuth 2.0 server requirements for token revocation.",
+                "## EXAMPLES:\n- `Authorization: Basic Y2xpZW50SWQ6Y2xpZW50U2VjcmV0`\n- `Content-Type: application/x-www-form-urlencoded`\n- `X-Custom-Header: customValue`",
+                "A collection of HTTP headers to include in the token revocation request for OAuth 2.0.\nThese headers can be used to specify additional metadata such as content type,\nauthorization credentials, custom client information,\nor any other required HTTP headers that the revocation endpoint expects.\nThis allows for greater flexibility and control over the HTTP request sent to\nthe authorization server when revoking tokens.",
+                "A collection of HTTP headers to include in the token revocation request for OAuth 2.0.\nThese headers can be used to specify additional metadata such as content type,\nauthorization credentials, custom client information,\nor any other required HTTP headers that the revocation endpoint expects.\nThis allows for greater flexibility and control over the HTTP request sent to\nthe authorization server when revoking tokens."
+              ],
+              "oneOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the HTTP header to send.",
+                        "examples": ["Content-Type"]
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Value of the HTTP header to send.",
+                        "examples": ["application/x-www-form-urlencoded"]
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "unencrypted": {
+          "type": "object",
+          "description": "Non-sensitive key-value pairs accessible via iClient\nreferences (e.g. email, account ID, role).",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- `{\"email\":\"my_email@company.com\", \"accountId\": \"8675301\", \"role\":\"admin\"}`",
+            "Store all non-sensitive fields required by your imports and exports to access\nthe app you are connecting to;\nthese values can be referenced by resources within integrator.io through the iClient.",
+            "## IMPORTANT NOTES:\n- Only store non-sensitive values here (safe to store unencrypted).\n- Use `encrypted` for secrets (passwords, tokens, keys).",
+            "Store all non-sensitive fields required by your imports and exports to access\nthe app you are connecting to;\nthese values can be referenced by resources within integrator.io through the iClient.",
+            "Store all non-sensitive fields required by your imports and exports to access\nthe app you are connecting to;\nthese values can be referenced by resources within integrator.io through the iClient."
+          ]
+        },
+        "encrypted": {
+          "type": ["object", "string"],
+          "description": "Sensitive key-value pairs stored with AES-256 encryption.\nSend an object when writing; API responses mask the whole\nvalue as the string `\"******\"`.",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- `{\"password\":\"celigorocks\"}`\n- `{\"token\":\"x7if4nkovhgr63ghp\"}`",
+            "## IMPORTANT NOTES:\n- Use this for secrets (passwords, tokens, keys).\n- Values may be masked (e.g., `\"******\"`) in API responses once stored.",
+            "Store all **sensitive** fields required by your imports and exports to access\nthe app you are connecting to;\nthese values are stored with **AES-256 encryption** and other layers of\nprotection to keep your data safe,\nand can be referenced by resources within integrator.io through the iClient.",
+            "Store all **sensitive** fields required by your imports and exports to access\nthe app you are connecting to;\nthese values are stored with **AES-256 encryption** and other layers of\nprotection to keep your data safe,\nand can be referenced by resources within integrator.io through the iClient.",
+            "Store all **sensitive** fields required by your imports and exports to access\nthe app you are connecting to;\nthese values are stored with **AES-256 encryption** and other layers of\nprotection to keep your data safe,\nand can be referenced by resources within integrator.io through the iClient."
+          ]
+        }
+      }
+    },
+    "netsuite": {
+      "type": "object",
+      "description": "NetSuite token-based authentication credentials.",
+      "x-celigo-ai-guidance": [
+        "Configuration settings and credentials required to integrate with the NetSuite platform,\nenabling seamless data synchronization and interaction with NetSuite's ERP and CRM services.\nThis property typically includes authentication details, API endpoints,\nand any necessary parameters for establishing a secure connection.",
+        "## IMPORTANT NOTES:\n- Incorrect or outdated credentials will prevent successful integration.\n- NetSuite API limits and governance should be considered to avoid throttling.\n- Regularly review and rotate credentials to maintain security.\n- Integration may require specific permissions within NetSuite roles.",
+        "## IMPLEMENTATION GUIDANCE:\n- Ensure sensitive credentials are stored securely and encrypted.\n- Validate all required fields before attempting connection to NetSuite.\n- Support environment-specific configurations (e.g., sandbox vs. production).\n- Handle error responses gracefully to maintain integration stability.\n- Keep the configuration up to date with NetSuite API version changes.",
+        "## TECHNICAL DETAILS:\n- Typically includes OAuth 1.0a or token-based authentication parameters.\n- May require JSON or XML formatted configuration data.\n- Supports both REST and SOAP API protocols depending on use case.\n- Configuration format should align with NetSuite's API specification requirements.",
+        "## FIELD BEHAVIOR:\n- Holds all necessary information to authenticate and communicate with NetSuite APIs.\n- Used to configure integration settings such as account ID, role, and environment.\n- Enables data exchange between the application and NetSuite for operations like record creation, updates, and queries.\n- May support multiple authentication methods, including token-based and OAuth.",
+        "## EXAMPLES:\n- API credentials including consumer key, consumer secret, token ID, and token secret.\n- Account ID and role ID for specifying the NetSuite account and user role.\n- URLs for NetSuite REST or SOAP API endpoints.\n- Flags or settings indicating sandbox or production environment.",
+        "## DEPENDENCY CHAIN:\n- Dependent on secure storage mechanisms for credentials.\n- Relies on network connectivity to NetSuite services.\n- May depend on other configuration properties like logging or retry policies.",
+        "Configuration settings and credentials required to integrate with the NetSuite platform,\nenabling seamless data synchronization and interaction with NetSuite's ERP and CRM services.\nThis property typically includes authentication details, API endpoints,\nand any necessary parameters for establishing a secure connection.",
+        "Configuration settings and credentials required to integrate with the NetSuite platform,\nenabling seamless data synchronization and interaction with NetSuite's ERP and CRM services.\nThis property typically includes authentication details, API endpoints,\nand any necessary parameters for establishing a secure connection."
+      ],
+      "properties": {
+        "consumerKey": {
+          "type": "string",
+          "description": "NetSuite consumer key. Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "Set the NetSuite consumer key value used for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores this value encrypted at rest (for example as\n`consumerKey_crypt`/`consumerKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plaintext consumer key here to set/update it.\n- To keep the existing value unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "Set the NetSuite consumer key value used for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores this value encrypted at rest (for example as\n`consumerKey_crypt`/`consumerKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "Set the NetSuite consumer key value used for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores this value encrypted at rest (for example as\n`consumerKey_crypt`/`consumerKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set."
+          ]
+        },
+        "consumerSecret": {
+          "type": "string",
+          "description": "NetSuite consumer secret. Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plaintext consumer secret here to set/update it.\n- To keep the existing value unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "The NetSuite consumer secret value used for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores this value encrypted at rest (for example as\n`consumerSecret_crypt`/`consumerSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "The NetSuite consumer secret value used for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores this value encrypted at rest (for example as\n`consumerSecret_crypt`/`consumerSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "The NetSuite consumer secret value used for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores this value encrypted at rest (for example as\n`consumerSecret_crypt`/`consumerSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set."
+          ]
+        }
+      }
+    },
+    "salesforce": {
+      "type": "object",
+      "description": "Salesforce authentication credentials.",
+      "x-celigo-ai-guidance": [
+        "## FIELD BEHAVIOR:\n- Holds all necessary information to authenticate and communicate with Salesforce services.\n- Used to configure API calls for data retrieval, updates, and other Salesforce operations.\n- May include nested objects or fields such as client ID, client secret, access tokens, instance URLs, and API versions.",
+        "## EXAMPLES:\n- An object containing OAuth credentials: client_id, client_secret, refresh_token, and instance_url.\n- Configuration specifying API version and endpoint URLs.\n- JSON structure with nested authentication and connection parameters.",
+        "## IMPORTANT NOTES:\n- Proper error handling should be implemented for authentication failures or API call errors.\n- Salesforce API limits and quotas should be considered when designing integration logic.\n- Secure handling of credentials is critical to prevent unauthorized access.\n- The structure and required fields may vary depending on the Salesforce API version and authentication method used.",
+        "## IMPLEMENTATION GUIDANCE:\n- Ensure sensitive information like client secrets and access tokens are securely stored and transmitted.\n- Validate the presence and correctness of required fields before attempting Salesforce integration.\n- Support token refresh mechanisms if applicable to maintain session validity.\n- Allow configuration flexibility to support different Salesforce environments (e.g., sandbox, production).",
+        "## DEPENDENCY CHAIN:\n- Dependent on Salesforce authentication mechanisms (OAuth 2.0, username-password flow, etc.).\n- Relies on network connectivity to Salesforce endpoints.\n- May depend on external libraries or SDKs for Salesforce API interaction.",
+        "Configuration settings and credentials required to integrate with Salesforce,\nenabling seamless data synchronization and interaction with Salesforce APIs.\nThis property typically includes authentication details, API endpoints,\nand any necessary parameters for establishing a secure connection to a Salesforce instance.",
+        "## TECHNICAL DETAILS:\n- Typically involves OAuth 2.0 tokens or username-password credentials.\n- Uses HTTPS for secure communication with Salesforce REST or SOAP APIs.\n- May include refresh token logic to maintain long-term access.\n- Supports configuration of API versioning to align with Salesforce API changes.",
+        "Configuration settings and credentials required to integrate with Salesforce,\nenabling seamless data synchronization and interaction with Salesforce APIs.\nThis property typically includes authentication details, API endpoints,\nand any necessary parameters for establishing a secure connection to a Salesforce instance.",
+        "Configuration settings and credentials required to integrate with Salesforce,\nenabling seamless data synchronization and interaction with Salesforce APIs.\nThis property typically includes authentication details, API endpoints,\nand any necessary parameters for establishing a secure connection to a Salesforce instance."
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "description": "Salesforce connected app client ID.",
+          "x-celigo-ai-guidance": [
+            "## IMPLEMENTATION GUIDANCE:\n- Obtain this value from the Salesforce connected app configuration.\n- Store securely and avoid exposing it in client-side code.\n- Validate the format to ensure it matches Salesforce client ID patterns.\n- Use in conjunction with clientSecret for authentication.",
+            "## DEPENDENCY CHAIN:\n- Dependent on the Salesforce connected app setup.\n- Works alongside clientSecret, redirectUri, and OAuth tokens.\n- Required for generating access tokens.",
+            "The unique identifier assigned to a client application by Salesforce during the\nOAuth client registration process.\nThis ID is used to authenticate the client when making API requests and\nestablishing a secure connection with Salesforce services.\nIt is essential for enabling authorized access to Salesforce resources on behalf\nof the client application.",
+            "## EXAMPLES:\n- \"3MVG9d6T2QxX9z5l7Y8P0qR1sT2uVwXyZAbCdEfGhIjKlMnOpQrStUvWxYz123456\"\n- \"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\"",
+            "## IMPORTANT NOTES:\n- The clientId alone does not grant access; it must be paired with appropriate credentials and tokens.\n- Changing the clientId requires updating all integrations using it.\n- Keep the clientId confidential to prevent unauthorized access.",
+            "## TECHNICAL DETAILS:\n- Typically a 40-character alphanumeric string.\n- Assigned by Salesforce upon connected app creation.\n- Used in HTTP headers or request parameters during OAuth flows.",
+            "## FIELD BEHAVIOR:\n- Must be a non-empty string.\n- Used as part of the OAuth authentication flow.\n- Typically remains constant for a given client application.\n- Required for initiating API calls to Salesforce.",
+            "The unique identifier assigned to a client application by Salesforce during the\nOAuth client registration process.\nThis ID is used to authenticate the client when making API requests and\nestablishing a secure connection with Salesforce services.\nIt is essential for enabling authorized access to Salesforce resources on behalf\nof the client application.",
+            "The unique identifier assigned to a client application by Salesforce during the\nOAuth client registration process.\nThis ID is used to authenticate the client when making API requests and\nestablishing a secure connection with Salesforce services.\nIt is essential for enabling authorized access to Salesforce resources on behalf\nof the client application."
+          ],
+          "examples": [
+            "3MVG9pRzvMkjMb6kkUMc3nVfDlF1H9V8sV0kZ8wQ7nC2x",
+            "3MVG9d6T2QxX9z5l7Y8P0qR1sT2uVwXyZAbCdEfGhIjKlMnOpQrStUvWxYz123456",
+            "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+          ]
+        },
+        "clientSecret": {
+          "type": "string",
+          "description": "Salesforce client secret. Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plain client secret value here to set/update it.\n- To keep the existing secret unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "Use the Salesforce OAuth **client secret** value to configure or update the Salesforce iClient;\nintegrator.io stores this secret encrypted at rest internally (for example as\n`clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a secret is already set.",
+            "Use the Salesforce OAuth **client secret** value to configure or update the Salesforce iClient;\nintegrator.io stores this secret encrypted at rest internally (for example as\n`clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a secret is already set.",
+            "Use the Salesforce OAuth **client secret** value to configure or update the Salesforce iClient;\nintegrator.io stores this secret encrypted at rest internally (for example as\n`clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a secret is already set."
+          ]
+        },
+        "apiToken": {
+          "type": "string",
+          "description": "Salesforce security token appended to the password for\nusername-password auth flows.",
+          "x-celigo-ai-guidance": [
+            "## DEPENDENCY CHAIN:\n- Dependent on Salesforce user credentials or OAuth authorization flows.\n- Used in conjunction with the Salesforce instance URL and API endpoints.\n- May require additional headers or parameters as per Salesforce API specifications.",
+            "## IMPORTANT NOTES:\n- The API token is sensitive information and should be treated like a password.\n- Sharing or leaking the token can compromise Salesforce data security.\n- Ensure compliance with Salesforce security policies when handling tokens.\n- Different Salesforce environments (sandbox vs production) may require different tokens.",
+            "## EXAMPLES:\n- A long alphanumeric string like \"00Dxx0000001gPFEAY!AQ0AQJ...\"\n- OAuth access tokens obtained via Salesforce OAuth 2.0 flows.\n- Tokens generated from Salesforce connected apps for API access.",
+            "## IMPLEMENTATION GUIDANCE:\n- Store the token securely, such as in environment variables or secure vaults.\n- Avoid hardcoding the token in source code or exposing it in logs.\n- Implement token refresh logic if using OAuth tokens with limited lifespans.\n- Validate the token format before use to prevent malformed requests.",
+            "## TECHNICAL DETAILS:\n- Typically included in HTTP headers as \"Authorization: Bearer {apiToken}\".\n- May have scopes or permissions associated depending on how it was generated.\n- Tokens may be JWTs or opaque strings depending on the authentication method.\n- Salesforce APIs validate the token on each request to authorize access.",
+            "The API token used to authenticate requests to the Salesforce API.\nThis token acts as a secure credential that grants access to Salesforce\nresources and operations,\nensuring that only authorized clients can interact with the Salesforce environment.\nIt is typically generated within Salesforce or through an OAuth flow and must be\nkept confidential to prevent unauthorized access.",
+            "## FIELD BEHAVIOR:\n- Used for authenticating API calls to Salesforce.\n- Must be included in the authorization header or as specified by the Salesforce API.\n- Typically has an expiration time and may require periodic renewal.\n- Invalid or expired tokens will result in authentication errors.",
+            "The API token used to authenticate requests to the Salesforce API.\nThis token acts as a secure credential that grants access to Salesforce\nresources and operations,\nensuring that only authorized clients can interact with the Salesforce environment.\nIt is typically generated within Salesforce or through an OAuth flow and must be\nkept confidential to prevent unauthorized access.",
+            "The API token used to authenticate requests to the Salesforce API.\nThis token acts as a secure credential that grants access to Salesforce\nresources and operations,\nensuring that only authorized clients can interact with the Salesforce environment.\nIt is typically generated within Salesforce or through an OAuth flow and must be\nkept confidential to prevent unauthorized access."
+          ]
+        },
+        "privateKey": {
+          "type": "string",
+          "description": "Private key for Salesforce JWT bearer token flows (PEM\nformat). Returned masked as `\"******\"`.",
+          "x-celigo-ai-guidance": [
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plaintext private key value here to set/update it (often PEM formatted).\n- To keep the existing private key unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "Set the Salesforce private key value used for authentication flows such as JWT\nbearer token OAuth;\nthis is the value you provide to configure or update the Salesforce iClient.\nInternally,\nintegrator.io stores this key encrypted at rest (for example as\n`privateKey_crypt`/`privateKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a key is already set.",
+            "Set the Salesforce private key value used for authentication flows such as JWT\nbearer token OAuth;\nthis is the value you provide to configure or update the Salesforce iClient.\nInternally,\nintegrator.io stores this key encrypted at rest (for example as\n`privateKey_crypt`/`privateKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a key is already set.",
+            "Set the Salesforce private key value used for authentication flows such as JWT\nbearer token OAuth;\nthis is the value you provide to configure or update the Salesforce iClient.\nInternally,\nintegrator.io stores this key encrypted at rest (for example as\n`privateKey_crypt`/`privateKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a key is already set."
+          ]
+        },
+        "publicKey": {
+          "type": "string",
+          "description": "Public key corresponding to `privateKey` (PEM format).",
+          "x-celigo-ai-guidance": [
+            "## DEPENDENCY CHAIN:\n- Dependent on the cryptographic algorithm and key pair generation process.\n- Used by authentication, encryption, or signature verification components.\n- May be linked to other security configurations such as certificates or token validation settings.",
+            "## FIELD BEHAVIOR:\n- Accepts a string value representing the public key in a standard format (e.g., PEM, DER).\n- Used to encrypt data or verify signatures in cryptographic operations.\n- Must be provided in a format compatible with the consuming system.\n- Immutable once set for a given integration instance to maintain security.",
+            "## EXAMPLES:\n- A PEM-encoded RSA public key string starting with \"-----BEGIN PUBLIC KEY-----\".\n- An ECDSA public key represented in base64 encoding.\n- A public key string used to verify JWT tokens issued by Salesforce.",
+            "## TECHNICAL DETAILS:\n- Typically encoded in PEM or DER format.\n- May include metadata such as key type and length.\n- Should comply with relevant security standards (e.g., PKCS#1, X.509).\n- Size and algorithm choice affect security strength and performance.",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the public key is generated using a secure and recognized cryptographic algorithm (e.g., RSA, ECDSA).\n- Validate the key format before accepting it to prevent errors during cryptographic operations.\n- Store the key securely and restrict access to prevent unauthorized modifications.\n- Update the key only through a controlled process to avoid breaking integrations.",
+            "## IMPORTANT NOTES:\n- The publicKey must correspond to the private key held securely by the entity performing signing or decryption.\n- Do not expose the private key in any API or configuration.\n- Incorrect or malformed keys will cause authentication or encryption failures.\n- Keep the key updated in case of key rotation policies.",
+            "The publicKey property represents the public cryptographic key used for secure data encryption,\nverification, or authentication processes within the Salesforce integration.\nThis key is typically part of a public-private key pair and is used to encrypt\ndata or verify digital signatures without exposing the private key.\nIt ensures secure communication and data integrity between systems.",
+            "The publicKey property represents the public cryptographic key used for secure data encryption,\nverification, or authentication processes within the Salesforce integration.\nThis key is typically part of a public-private key pair and is used to encrypt\ndata or verify digital signatures without exposing the private key.\nIt ensures secure communication and data integrity between systems.",
+            "The publicKey property represents the public cryptographic key used for secure data encryption,\nverification, or authentication processes within the Salesforce integration.\nThis key is typically part of a public-private key pair and is used to encrypt\ndata or verify digital signatures without exposing the private key.\nIt ensures secure communication and data integrity between systems."
+          ]
+        }
+      }
+    },
+    "ebay": {
+      "type": "object",
+      "description": "eBay REST/Trading API authentication credentials.",
+      "x-celigo-ai-guidance": [
+        "## EXAMPLES:\n- API key and secret for eBay developer account.\n- OAuth tokens for user authentication with eBay.\n- URLs for eBay REST or Trading API endpoints.\n- Flags to enable or disable specific eBay features like inventory management or order processing.",
+        "## FIELD BEHAVIOR:\n- Holds all necessary eBay-related configuration details.\n- Used to enable and customize eBay platform interactions.\n- May include API keys, tokens, endpoint URLs, and feature toggles.\n- Supports dynamic updates to eBay integration settings without redeploying the application.",
+        "## TECHNICAL DETAILS:\n- Typically structured as a nested object containing keys like clientId, clientSecret, accessToken, refreshToken, and apiEndpoints.\n- May include metadata such as token expiration timestamps and scopes.\n- Supports serialization and secure storage mechanisms.\n- Designed to be extensible for future eBay API features and versions.",
+        "## DEPENDENCY CHAIN:\n- Dependent on eBay developer account and API access permissions.\n- Interacts with authentication modules to manage tokens.\n- Works alongside order management and inventory systems for synchronization.\n- May depend on network connectivity and proxy settings for API calls.",
+        "## IMPORTANT NOTES:\n- Credentials must be kept confidential and never exposed in client-side code.\n- Regularly update tokens and keys to maintain uninterrupted service.\n- Comply with eBay's API usage policies and rate limits.\n- Changes to this configuration may affect live eBay transactions and listings.",
+        "Contains configuration settings and credentials specific to eBay integration\nwithin the application.\nThis property manages parameters required to connect, authenticate,\nand interact with eBay's APIs and services.",
+        "## IMPLEMENTATION GUIDANCE:\n- Securely store sensitive information such as API credentials.\n- Validate the presence and correctness of required fields before making API calls.\n- Support environment-specific configurations (e.g., sandbox vs. production).\n- Ensure compatibility with the latest eBay API versions.\n- Provide clear error handling and logging for eBay-related operations.",
+        "Contains configuration settings and credentials specific to eBay integration\nwithin the application.\nThis property manages parameters required to connect, authenticate,\nand interact with eBay's APIs and services.",
+        "Contains configuration settings and credentials specific to eBay integration\nwithin the application.\nThis property manages parameters required to connect, authenticate,\nand interact with eBay's APIs and services."
+      ],
+      "properties": {
+        "appId": {
+          "type": "string",
+          "description": "eBay application ID from the eBay Developer Program.",
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Typically a UUID or a unique string assigned by eBay.\n- Passed as part of HTTP headers or query parameters depending on the API.\n- Used by eBay servers to identify and authenticate the application making the request.",
+            "## IMPLEMENTATION GUIDANCE:\n- Obtain the appId by registering your application on the eBay Developer Program portal.\n- Keep the appId confidential to prevent unauthorized use.\n- Include the appId in the request headers or parameters as specified by the API documentation.\n- Validate the appId format before sending requests to avoid errors.",
+            "## EXAMPLES:\n- \"12345678-1234-1234-1234-123456789abc\"\n- \"MyEbayAppID2024\"\n- \"APP-9876543210\"",
+            "## DEPENDENCY CHAIN:\n- Depends on successful registration with the eBay Developer Program.\n- Used in conjunction with other authentication credentials like OAuth tokens.\n- Required before making authorized API calls.",
+            "The unique identifier assigned to an application registered with the eBay developer program.\nThis ID is used to authenticate API requests and associate them with a specific application.",
+            "## IMPORTANT NOTES:\n- The appId is different from other eBay credentials such as client ID or client secret.\n- Using an invalid or expired appId will result in authentication errors.\n- Do not share your appId publicly to protect your application's security.",
+            "## FIELD BEHAVIOR:\n- Must be included in API requests to identify the calling application.\n- Typically a string consisting of alphanumeric characters.\n- Used to track usage and enforce rate limits for the application.\n- Required for accessing most eBay APIs.",
+            "The unique identifier assigned to an application registered with the eBay developer program.\nThis ID is used to authenticate API requests and associate them with a specific application.",
+            "The unique identifier assigned to an application registered with the eBay developer program.\nThis ID is used to authenticate API requests and associate them with a specific application."
+          ],
+          "examples": [
+            "MyCompan-MyApp-PRD-1a2b3c4d5-6e7f8a9b",
+            "12345678-1234-1234-1234-123456789abc",
+            "MyEbayAppID2024",
+            "APP-9876543210"
+          ]
+        },
+        "devId": {
+          "type": "string",
+          "description": "eBay developer ID from the eBay Developer Program.",
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Typically a string of alphanumeric characters.\n- Assigned by eBay upon developer registration.\n- Used in API request headers or query parameters depending on the API endpoint.\n- Validated by eBay servers to authorize API access.",
+            "## IMPORTANT NOTES:\n- The devId is distinct from other eBay identifiers such as appId, certId, or auth tokens.\n- Misuse or leakage of the devId can lead to unauthorized API access.\n- Changes to the devId require updating all applications using it.\n- Ensure compliance with eBay's developer policies when using the devId.",
+            "## FIELD BEHAVIOR:\n- Must be included in API requests requiring developer authentication.\n- Used to identify the source of API calls.\n- Typically remains constant for a given developer or development team.\n- Should be kept confidential to prevent unauthorized use.",
+            "## EXAMPLES:\n- \"1234567890\"\n- \"dev_abcdef123456\"\n- \"9876543210\"",
+            "## DEPENDENCY CHAIN:\n- Often used alongside appId and certId for full API authentication.\n- May be required before obtaining OAuth tokens or other credentials.\n- Linked to developer account settings and permissions on eBay.",
+            "The unique identifier assigned to a developer or development team by eBay.\nThis ID is used to authenticate and track API usage associated with the\ndeveloper's applications.\nIt ensures that API requests are properly attributed and helps manage access\npermissions and rate limits.",
+            "## IMPLEMENTATION GUIDANCE:\n- Obtain the devId by registering as a developer on the eBay Developer Program portal.\n- Include the devId in all relevant API request headers or parameters as specified by eBay.\n- Store the devId securely in your application environment.\n- Do not expose the devId in client-side code or public repositories.",
+            "The unique identifier assigned to a developer or development team by eBay.\nThis ID is used to authenticate and track API usage associated with the\ndeveloper's applications.\nIt ensures that API requests are properly attributed and helps manage access\npermissions and rate limits.",
+            "The unique identifier assigned to a developer or development team by eBay.\nThis ID is used to authenticate and track API usage associated with the\ndeveloper's applications.\nIt ensures that API requests are properly attributed and helps manage access\npermissions and rate limits."
+          ],
+          "examples": [
+            "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+            "1234567890",
+            "dev_abcdef123456",
+            "9876543210"
+          ]
+        },
+        "certId": {
+          "type": "string",
+          "description": "eBay certificate ID. Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "Use the eBay certificate ID value for authentication;\nthis is the value you provide to configure or update the iClient. integrator.io\nstores it encrypted at rest (for example as `certId_crypt`/`certId_salt` fields\nin the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plaintext certificate ID value here to set/update it.\n- To keep the existing value unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "Use the eBay certificate ID value for authentication;\nthis is the value you provide to configure or update the iClient. integrator.io\nstores it encrypted at rest (for example as `certId_crypt`/`certId_salt` fields\nin the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "Use the eBay certificate ID value for authentication;\nthis is the value you provide to configure or update the iClient. integrator.io\nstores it encrypted at rest (for example as `certId_crypt`/`certId_salt` fields\nin the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set."
+          ]
+        },
+        "ruName": {
+          "type": "string",
+          "description": "eBay Redirect URL Name (RuName) \u2014 the auth redirect\ntarget registered in the eBay Developer Program.",
+          "x-celigo-ai-guidance": [
+            "## EXAMPLES:\n- \"\u042d\u043b\u0435\u043a\u0442\u0440\u043e\u043d\u0438\u043a\u0430\" (Electronics)\n- \"\u041c\u043e\u0434\u0430\" (Fashion)\n- \"\u0414\u043e\u043c \u0438 \u0441\u0430\u0434\" (Home and Garden)",
+            "The Russian name associated with the eBay entity,\ntypically used for localization and display purposes in Russian-language contexts.\nThis field contains the name as it should appear to Russian-speaking users,\nensuring proper representation and cultural relevance.",
+            "## TECHNICAL DETAILS:\n- Data type: string.\n- Character encoding: UTF-8.\n- Maximum length should conform to system constraints for name fields.",
+            "## IMPORTANT NOTES:\n- This field is optional if the entity does not have a Russian localization.\n- Avoid transliterations; use proper Russian language terms.\n- Consistency with other localized names is important for user experience.",
+            "## IMPLEMENTATION GUIDANCE:\n- Ensure the name is correctly translated and culturally appropriate.\n- Use Cyrillic characters as per Russian language standards.\n- Validate the string for encoding compatibility (UTF-8).\n- Update this field when the entity's Russian name changes.",
+            "## DEPENDENCY CHAIN:\n- May depend on the primary name or English name for context.\n- Used in conjunction with other localized name fields for multi-language support.",
+            "## FIELD BEHAVIOR:\n- Represents the localized name in Russian.\n- Used primarily for display in Russian language interfaces.\n- Should accurately reflect the entity's name in Russian script.\n- May be omitted if no Russian localization is available.",
+            "The Russian name associated with the eBay entity,\ntypically used for localization and display purposes in Russian-language contexts.\nThis field contains the name as it should appear to Russian-speaking users,\nensuring proper representation and cultural relevance.",
+            "The Russian name associated with the eBay entity,\ntypically used for localization and display purposes in Russian-language contexts.\nThis field contains the name as it should appear to Russian-speaking users,\nensuring proper representation and cultural relevance."
+          ],
+          "examples": [
+            "My_Company-MyCompan-MyApp-abcdefgh",
+            "\u042d\u043b\u0435\u043a\u0442\u0440\u043e\u043d\u0438\u043a\u0430",
+            "\u041c\u043e\u0434\u0430",
+            "\u0414\u043e\u043c \u0438 \u0441\u0430\u0434"
+          ]
+        }
+      }
+    },
+    "amazonmws": {
+      "type": "object",
+      "description": "Amazon Marketplace Web Service (MWS) authentication credentials.",
+      "x-celigo-ai-guidance": [
+        "## IMPORTANT NOTES:\n- Amazon MWS is being succeeded by the Selling Partner API (SP-API); consider migration plans.\n- Credentials must be kept confidential to prevent unauthorized access.\n- API access is subject to Amazon's terms of service and usage policies.\n- Proper error handling is critical to manage API rate limits and service disruptions.",
+        "Configuration settings required to integrate with the Amazon Marketplace Web\nService (Amazon MWS) API,\nenabling programmatic access to Amazon seller account data and operations.\nThis includes credentials and parameters necessary for authentication,\nauthorization, and interaction with various Amazon MWS endpoints.",
+        "## EXAMPLES:\n- Access Key ID: \"AKIAIOSFODNN7EXAMPLE\"\n- Secret Access Key: \"1234567890abcdef1234567890abcdef12345678\"\n- Seller ID: \"A1XEXAMPLE123\"\n- MWS Auth Token: \"amzn.mws.4ea38b7b-f563-7709-4bae-87aeaEXAMPLE\"",
+        "## FIELD BEHAVIOR:\n- Contains all necessary authentication credentials such as Access Key ID, Secret Access Key, Seller ID, and MWS Auth Token.\n- May include configuration options like marketplace IDs, region settings, and API version.\n- Used to establish secure and authorized communication with Amazon MWS services.\n- Typically required for operations such as order retrieval, inventory management, and report generation.",
+        "## TECHNICAL DETAILS:\n- Uses RESTful API calls with XML or JSON payloads.\n- Authentication is based on AWS Signature Version 2 or 4.\n- Supports multiple API sections including Orders, Reports, Feeds, and Products.\n- Requires timestamp synchronization to prevent request rejection.",
+        "## DEPENDENCY CHAIN:\n- Requires valid Amazon seller account with MWS access enabled.\n- Dependent on network connectivity to Amazon MWS endpoints.\n- May depend on other configuration properties such as marketplace identifiers.",
+        "## IMPLEMENTATION GUIDANCE:\n- Ensure all credentials are stored securely and transmitted over encrypted channels.\n- Validate the presence and correctness of all required fields before attempting API calls.\n- Support refreshing or updating credentials as needed to maintain uninterrupted access.\n- Handle error responses gracefully, including authentication failures or permission issues.\n- Follow Amazon MWS best practices and rate limits to avoid throttling.",
+        "Configuration settings required to integrate with the Amazon Marketplace Web\nService (Amazon MWS) API,\nenabling programmatic access to Amazon seller account data and operations.\nThis includes credentials and parameters necessary for authentication,\nauthorization, and interaction with various Amazon MWS endpoints.",
+        "Configuration settings required to integrate with the Amazon Marketplace Web\nService (Amazon MWS) API,\nenabling programmatic access to Amazon seller account data and operations.\nThis includes credentials and parameters necessary for authentication,\nauthorization, and interaction with various Amazon MWS endpoints."
+      ],
+      "properties": {
+        "accessKeyId": {
+          "type": "string",
+          "description": "AWS access key ID for MWS API requests.",
+          "x-celigo-ai-guidance": [
+            "## TECHNICAL DETAILS:\n- Format: 20-character alphanumeric string.\n- Used in the AWS Signature Version 2 or 4 signing process.\n- Included in the HTTP headers or query parameters of API requests.\n- Validated by Amazon MWS servers to authorize API calls.",
+            "## DEPENDENCY CHAIN:\n- Requires a corresponding Secret Access Key for request signing.\n- Must be associated with an AWS IAM user or role with Amazon MWS permissions.\n- Used alongside other credentials such as Seller ID and MWS Auth Token for full API access.",
+            "## EXAMPLES:\n- \"AKIAIOSFODNN7EXAMPLE\"\n- \"ABCD1234EFGH5678IJKL\"\n- \"A1B2C3D4E5F6G7H8I9J0\"",
+            "## IMPORTANT NOTES:\n- The Access Key ID alone is insufficient for authentication; it must be paired with the Secret Access Key.\n- Exposure of the Access Key ID and Secret Access Key can lead to unauthorized access and potential data breaches.\n- If compromised, immediately revoke and regenerate the keys via the AWS console.\n- Access Key IDs are case-sensitive.",
+            "## IMPLEMENTATION GUIDANCE:\n- Retrieve the Access Key ID from your AWS Management Console or Amazon MWS developer account.\n- Ensure the Access Key ID corresponds to the correct AWS user with appropriate permissions.\n- Do not hard-code the key in publicly accessible code repositories.\n- Rotate keys periodically to maintain security best practices.",
+            "## FIELD BEHAVIOR:\n- Must be a valid, active Access Key ID issued by Amazon.\n- Used in conjunction with the Secret Access Key to sign API requests.\n- Should be kept confidential to prevent unauthorized access.\n- Typically a 20-character alphanumeric string.",
+            "The Access Key ID is a unique identifier assigned to your Amazon MWS\n(Marketplace Web Service) account,\nused to authenticate API requests.\nIt acts as a public credential that, together with the Secret Access Key,\nallows secure access to Amazon MWS services.\nThis key is essential for programmatic interaction with Amazon's seller APIs,\nenabling operations such as order retrieval, inventory management,\nand report generation.",
+            "The Access Key ID is a unique identifier assigned to your Amazon MWS\n(Marketplace Web Service) account,\nused to authenticate API requests.\nIt acts as a public credential that, together with the Secret Access Key,\nallows secure access to Amazon MWS services.\nThis key is essential for programmatic interaction with Amazon's seller APIs,\nenabling operations such as order retrieval, inventory management,\nand report generation.",
+            "The Access Key ID is a unique identifier assigned to your Amazon MWS\n(Marketplace Web Service) account,\nused to authenticate API requests.\nIt acts as a public credential that, together with the Secret Access Key,\nallows secure access to Amazon MWS services.\nThis key is essential for programmatic interaction with Amazon's seller APIs,\nenabling operations such as order retrieval, inventory management,\nand report generation."
+          ],
+          "examples": [
+            "AKIAIOSFODNN7EXAMPLE",
+            "ABCD1234EFGH5678IJKL",
+            "A1B2C3D4E5F6G7H8I9J0"
+          ]
+        },
+        "secretKey": {
+          "type": "string",
+          "description": "AWS secret key. Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted.",
+          "x-celigo-ai-guidance": [
+            "Use the Amazon MWS secret key value for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores it encrypted at rest (for example as\n`secretKey_crypt`/`secretKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "## IMPLEMENTATION GUIDANCE:\n- Provide the plaintext secret key value here to set/update it.\n- To keep the existing value unchanged during an update, omit this field (or keep `\"******\"` as-is if returned).",
+            "Use the Amazon MWS secret key value for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores it encrypted at rest (for example as\n`secretKey_crypt`/`secretKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set.",
+            "Use the Amazon MWS secret key value for authentication;\nprovide this value to configure or update the iClient.\nInternally,\nintegrator.io stores it encrypted at rest (for example as\n`secretKey_crypt`/`secretKey_salt` fields in the underlying model),\nand API responses typically return a masked value (e.g.,\n`\"******\"`) when a value is already set."
+          ]
+        }
+      }
+    },
+    "azureserviceprincipal": {
+      "type": "object",
+      "description": "Azure AD service principal credentials. Required when `provider`\nis `azureserviceprincipal`.",
+      "required": ["clientId", "tenantId"],
+      "properties": {
+        "authMethod": {
+          "type": "string",
+          "enum": ["client-secret", "certificate"],
+          "default": "client-secret",
+          "x-enumDescriptions": {
+            "client-secret": "Authenticate with a client secret (`clientSecret`).",
+            "certificate": "Authenticate with a PEM certificate + private key (`certificate`)."
+          },
+          "description": "Which credential the service principal presents. Defaults to\n`client-secret` when omitted. Each method rejects the other\nmethod's credential fields on save."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Azure AD application (client) ID.",
+          "examples": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"]
+        },
+        "clientSecret": {
+          "type": "string",
+          "description": "Azure AD client secret. Required when `authMethod` is\n`client-secret` (or omitted). Returned masked as `\"******\"`.\nRe-send that value on update to keep it; it is not preserved if omitted."
+        },
+        "certificate": {
+          "type": "string",
+          "description": "PEM bundle (certificate + private key) for certificate auth.\nRequired when `authMethod` is `certificate`; rejected under\n`client-secret`. Maximum 20 KiB of PEM text. Returned masked.",
+          "x-celigo-ai-guidance": [
+            "If the PEM's private key is encrypted (BEGIN ENCRYPTED PRIVATE\nKEY / Proc-Type 4,ENCRYPTED), certificatePassword is required;\nif it is unencrypted, sending certificatePassword is rejected."
+          ]
+        },
+        "certificatePassword": {
+          "type": "string",
+          "description": "Passphrase for an encrypted private key inside `certificate`.\nRequired exactly when the PEM's key is encrypted; rejected when\nit is not. Maximum 256 bytes. Returned masked."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Azure AD tenant (directory) ID.",
+          "examples": ["f0e1d2c3-b4a5-6789-0abc-def012345678"]
+        }
+      }
+    },
+    "googleserviceaccount": {
+      "type": "object",
+      "description": "Google Cloud service-account credentials. Required when `provider` is\n`googleserviceaccount`. Send the raw JSON key file in\n`serviceAccountJSON`; the server parses out `project_id`,\n`client_email`, and `private_key` and stores them (the private key\nencrypted). Responses return only `clientEmail`.",
+      "properties": {
+        "serviceAccountJSON": {
+          "type": "string",
+          "writeOnly": true,
+          "description": "Full Google service-account key file as a JSON string. Must parse\nas JSON and contain `project_id`, `client_email`, and a valid PEM\n`private_key` \u2014 otherwise the save fails with\nICLIENT_GOOGLESERVICEACCOUNT_INVALID_JSON_KEY (or _INVALID_PEM\nwhen only the key material is malformed). On update, omitting it\n(or sending the mask) keeps the stored credentials."
+        },
+        "clientEmail": {
+          "type": "string",
+          "readOnly": true,
+          "description": "Service-account email parsed from the key file \u2014 the only field echoed in responses.",
+          "examples": ["integration@my-gcs-project.iam.gserviceaccount.com"]
+        }
+      }
+    },
+    "awsIam": {
+      "type": "object",
+      "description": "AWS IAM cross-account role credentials. Required when `provider` is `awsIam`\n(omitting the object fails with 422 `missing_required_field` \"The awsIam sub-schema is\nrequired\"). Celigo assumes `roleArn` using `externalId` as the trust-policy external ID.\nThe iClient itself saves with `externalId` alone; the connection that references it\nadds its own rules on `roleArn` (see that field).",
+      "required": ["externalId"],
+      "x-celigo-canon": {
+        "decision": "verified-exact",
+        "reason": "The iClient validator itemizes only externalId; roleArn is optional at iClient level and becomes mandatory only when an HTTP awsiam connection references the iClient.",
+        "method": "live-probe",
+        "verified": "2026-09-21"
+      },
+      "properties": {
+        "externalId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 1224,
+          "pattern": "^[a-zA-Z0-9+=,.@:/_-]+$",
+          "description": "External ID Celigo presents when assuming the role; must match the\n`sts:ExternalId` condition in the role's trust policy. Fixed at creation: a `PUT`\nthat sends a different value keeps the stored one. A value outside the allowed\ncharacter set or length fails with 422 `invalid_field_value`.",
+          "examples": ["celigo-7f3a9c2e1b"]
+        },
+        "roleArn": {
+          "type": "string",
+          "pattern": "^arn:[a-z-]+:iam::\\d{12}:role/[A-Za-z0-9+=,.@_/-]{1,576}$",
+          "description": "ARN of the AWS IAM role to assume for cross-account access. Optional on the iClient\n(a malformed ARN fails with 422 `invalid_field_value`), but an HTTP connection with\n`auth.type` `awsiam` cannot be saved against this iClient until it is set and its\nrole name starts with `celigo-http-adaptor-`.",
+          "x-celigo-ai-guidance": [
+            "For an HTTP connection using auth.type \"awsiam\", name the role\n\"celigo-http-adaptor-<anything>\" \u2014 the connection save fails with 422\ninvalid_field_value \"HTTP IAM Role authentication requires awsIam.roleArn to\nreference a role name starting with celigo-http-adaptor-.\" otherwise, and with 422\nmissing_required_field \"Expected field: awsIam.roleArn to be present.\" while roleArn\nis unset. The prefix rule is specific to HTTP awsiam connections."
+          ],
+          "examples": [
+            "arn:aws:iam::123456789012:role/celigo-http-adaptor-orders"
+          ]
+        }
+      }
+    },
+    "jwt": {
+      "type": "object",
+      "description": "JWT assertion configuration. Used when `enableJWT` is true to\ngenerate a signed JWT for inclusion in OAuth token requests via\n`{{{iClient.jwt.token}}}`.",
+      "x-celigo-ai-guidance": [
+        "## IMPLEMENTATION GUIDANCE:\n- Validate the JWT on the server side to ensure it is properly signed and not expired.\n- Use secure algorithms (e.g., RS256 or HS256) for signing the token.\n- Store sensitive information in the payload with caution, as JWTs can be decoded by clients.\n- Refresh tokens should be used to obtain new JWTs when the current one expires.",
+        "## FIELD BEHAVIOR:\n- Must be a valid JWT string following the standard format: header.payload.signature.\n- Used to authenticate API requests and authorize access to specific endpoints.\n- Typically included in the Authorization header as a Bearer token.\n- Should have an expiration time to enhance security.",
+        "A JSON Web Token (JWT) used for securely transmitting information between\nparties as a JSON object.\nThis token is typically used for authentication and authorization purposes,\nensuring that the client has valid credentials to access protected resources.\nThe JWT contains encoded header, payload,\nand signature sections that verify the token's integrity and authenticity.",
+        "## IMPORTANT NOTES:\n- JWTs should be transmitted over secure channels (HTTPS) to prevent interception.\n- Do not store JWTs in insecure storage locations on the client side (e.g., localStorage) to avoid XSS attacks.\n- Always verify the token's signature and claims before granting access.\n- Be aware of token expiration and implement proper handling for expired tokens.",
+        "## EXAMPLES:\n- eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c\n- eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJleGFtcGxlLmNvbSIsInN1YiI6IjEyMzQ1Njc4OTAiLCJleHAiOjE2MjQ2MjQwMDB9.DQABCD1234abcd5678efgh9012ijkl3456mnop7890qrstuv",
+        "## DEPENDENCY CHAIN:\n- Depends on the authentication mechanism generating the JWT.\n- Requires a",
+        "A JSON Web Token (JWT) used for securely transmitting information between\nparties as a JSON object.\nThis token is typically used for authentication and authorization purposes,\nensuring that the client has valid credentials to access protected resources.\nThe JWT contains encoded header, payload,\nand signature sections that verify the token's integrity and authenticity.",
+        "A JSON Web Token (JWT) used for securely transmitting information between\nparties as a JSON object.\nThis token is typically used for authentication and authorization purposes,\nensuring that the client has valid credentials to access protected resources.\nThe JWT contains encoded header, payload,\nand signature sections that verify the token's integrity and authenticity."
+      ],
+      "properties": {
+        "signatureMethod": {
+          "type": "string",
+          "enum": [
+            "hmac-sha256",
+            "hmac-sha384",
+            "hmac-sha512",
+            "rsa-sha256",
+            "rsa-sha384",
+            "rsa-sha512",
+            "es256",
+            "es384",
+            "es512",
+            "ps256",
+            "ps384",
+            "ps512"
+          ],
+          "x-enumDescriptions": {
+            "hmac-sha256": "HMAC with SHA-256 (symmetric); signs with secret.",
+            "hmac-sha384": "HMAC with SHA-384 (symmetric); signs with secret.",
+            "hmac-sha512": "HMAC with SHA-512 (symmetric); signs with secret.",
+            "rsa-sha256": "RSA with SHA-256 (asymmetric); signs with privateKey.",
+            "rsa-sha384": "RSA with SHA-384 (asymmetric); signs with privateKey.",
+            "rsa-sha512": "RSA with SHA-512 (asymmetric); signs with privateKey.",
+            "es256": "ECDSA with P-256 and SHA-256 (asymmetric); signs with privateKey.",
+            "es384": "ECDSA with P-384 and SHA-384 (asymmetric); signs with privateKey.",
+            "es512": "ECDSA with P-521 and SHA-512 (asymmetric); signs with privateKey.",
+            "ps256": "RSASSA-PSS with SHA-256 (asymmetric); signs with privateKey.",
+            "ps384": "RSASSA-PSS with SHA-384 (asymmetric); signs with privateKey.",
+            "ps512": "RSASSA-PSS with SHA-512 (asymmetric); signs with privateKey."
+          },
+          "description": "Algorithm used to sign the JWT. HMAC methods sign with `secret`;\nRSA/ECDSA/PSS methods sign with `privateKey`."
+        },
+        "payload": {
+          "description": "JWT payload claims. Can be a JSON object or a stringified\nJSON template with Handlebars expressions.",
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "Deliberately untyped \u2014 production is genuinely mixed string/object; do not tighten to a single JSON type without a widening probe.",
+            "method": "full-population",
+            "verified": "2026-07-03"
+          }
+        },
+        "headers": {
+          "description": "JWT header claims. Can be a JSON object or a stringified\nJSON template with Handlebars expressions.",
+          "x-celigo-canon": {
+            "decision": "no-constraint",
+            "reason": "Deliberately untyped \u2014 production is genuinely mixed string/object; do not tighten to a single JSON type without a widening probe.",
+            "method": "full-population",
+            "verified": "2026-07-03"
+          }
+        },
+        "privateKey": {
+          "type": "string",
+          "description": "Private key for signing the JWT. Returned masked as\n`\"******\"`. Re-send that value on update to keep it; it is not preserved if omitted."
+        },
+        "token": {
+          "type": "string",
+          "readOnly": true,
+          "description": "Server-computed signed JWT token. Returned masked as\n`\"******\"` in responses."
+        },
+        "secret": {
+          "type": "string",
+          "description": "Shared secret for HMAC-based JWT signing (e.g. HS256).\nReturned masked as `\"******\"`. Re-send that value on update to\nkeep it; it is not preserved if omitted."
+        },
+        "isSecretBase64Encoded": {
+          "type": "boolean",
+          "description": "When true, the `secret` value is Base64-encoded."
+        }
+      }
+    }
+  },
+  "required": ["provider"]
+}

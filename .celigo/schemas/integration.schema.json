@@ -1,0 +1,184 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Celigo integration",
+  "type": "object",
+  "description": "Fields that can be sent when creating or updating an integration.",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable name for the integration.",
+      "examples": ["Shopify \u2192 NetSuite Orders"]
+    },
+    "description": {
+      "type": ["string", "null"],
+      "maxLength": 5120,
+      "description": "Optional description of the integration's purpose and behavior."
+    },
+    "readme": {
+      "type": ["string", "null"],
+      "maxLength": 51200,
+      "description": "Long-form README content for the integration (typically Markdown)."
+    },
+    "_connectorId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "connectors",
+      "description": "Integration App (connector) identifier when this integration is based on an installed Integration App."
+    },
+    "_templateId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "templates",
+      "description": "Template identifier used to create/initialize this integration."
+    },
+    "install": {
+      "type": "array",
+      "description": "Install \"cards\" shown during an Integration App installation."
+    },
+    "mode": {
+      "type": "string",
+      "description": "Integration App lifecycle mode.",
+      "enum": ["install", "settings", "uninstall"],
+      "examples": ["install"]
+    },
+    "settings": {
+      "description": "Integration App settings object for this integration."
+    },
+    "version": {
+      "type": ["string", "null"],
+      "examples": ["1.2.0"],
+      "description": "Integration App version (or template version) associated with this integration."
+    },
+    "tag": {
+      "type": ["string", "null"],
+      "examples": ["instance-2"],
+      "description": "Legacy field for distinguishing multiple instances of the same Integration App."
+    },
+    "updateInProgress": {
+      "type": "boolean"
+    },
+    "celigoAgentAutoRunMode": {
+      "type": "boolean",
+      "examples": [false]
+    },
+    "resolvedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "settingsForm": {
+      "description": "Settings form definition for the integration."
+    },
+    "_parentId": {
+      "type": "string",
+      "format": "objectId",
+      "x-celigo-refModel": "integrations",
+      "description": "Parent integration ID when this integration was created as a child of another integration."
+    },
+    "childDisplayName": {
+      "type": "string",
+      "examples": ["West region store"]
+    },
+    "flowGroupings": {
+      "type": "array",
+      "description": "UI grouping configuration that groups an integration's flows into named sections. Works on any integration.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name"],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "objectId",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "examples": ["Order sync"]
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "settingsForm": {}
+        }
+      }
+    },
+    "apiGroupings": {
+      "type": "array",
+      "description": "UI grouping configuration for APIs within the integration.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name"],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "objectId",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "examples": ["Inventory APIs"]
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "settingsForm": {}
+        }
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "description": "Named aliases that map to specific resources within the integration.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "examples": ["ordersExport"]
+          },
+          "description": {
+            "type": "string"
+          },
+          "_exportId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "exports"
+          },
+          "_importId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "imports"
+          },
+          "_flowId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "flows"
+          },
+          "_connectionId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "connections"
+          },
+          "_lookupCacheId": {
+            "type": "string",
+            "format": "objectId",
+            "x-celigo-refModel": "lookupcaches"
+          }
+        }
+      }
+    },
+    "sandbox": {
+      "type": "boolean",
+      "deprecated": true
+    },
+    "iLMIgnore": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": ["name"]
+}
