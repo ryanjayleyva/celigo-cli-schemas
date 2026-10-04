@@ -1,0 +1,88 @@
+{
+  "lsp": {
+    "json-language-server": {
+      "settings": {
+        "json": {
+          "schemas": [
+            {
+              "fileMatch": ["iclients/*.json"],
+              "url": "./.celigo/schemas/iclient.schema.json"
+            },
+            {
+              "fileMatch": ["connections/*.json"],
+              "url": "./.celigo/schemas/connection.schema.json"
+            },
+            {
+              "fileMatch": ["flows/*.json"],
+              "url": "./.celigo/schemas/flow.schema.json"
+            },
+            {
+              "fileMatch": ["exports/*.json"],
+              "url": "./.celigo/schemas/export.schema.json"
+            },
+            {
+              "fileMatch": ["imports/*.json"],
+              "url": "./.celigo/schemas/import.schema.json"
+            },
+            {
+              "fileMatch": ["scripts/*.json"],
+              "url": "./.celigo/schemas/script.schema.json"
+            },
+            {
+              "fileMatch": ["integrations/*.json"],
+              "url": "./.celigo/schemas/integration.schema.json"
+            },
+            {
+              "fileMatch": ["apis/*.json"],
+              "url": "./.celigo/schemas/api.schema.json"
+            },
+            {
+              "fileMatch": ["lookup-caches/*.json"],
+              "url": "./.celigo/schemas/lookupcache.schema.json"
+            },
+            {
+              "fileMatch": ["tools/*.json"],
+              "url": "./.celigo/schemas/tool.schema.json"
+            },
+            {
+              "fileMatch": ["mcp-servers/*.json"],
+              "url": "./.celigo/schemas/mcp-server.schema.json"
+            },
+            {
+              "fileMatch": ["edi-profiles/*.json"],
+              "url": "./.celigo/schemas/ediprofile.schema.json"
+            },
+            {
+              "fileMatch": ["file-definitions/*.json"],
+              "url": "./.celigo/schemas/filedefinition.schema.json"
+            },
+            {
+              "fileMatch": ["guardrails/*.json"],
+              "url": "./.celigo/schemas/guardrail.schema.json"
+            },
+            {
+              "fileMatch": ["ai-agents/*.json"],
+              "url": "./.celigo/schemas/ai-agent.schema.json"
+            },
+            {
+              "fileMatch": ["stacks/*.json"],
+              "url": "./.celigo/schemas/stack.schema.json"
+            },
+            {
+              "fileMatch": ["async-helpers/*.json"],
+              "url": "./.celigo/schemas/asynchelper.schema.json"
+            },
+            {
+              "fileMatch": ["mcp-oauth-providers/*.json"],
+              "url": "./.celigo/schemas/mcp-oauth-provider.schema.json"
+            },
+            {
+              "fileMatch": ["on-premise-agents/*.json"],
+              "url": "./.celigo/schemas/on-premise-agent.schema.json"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
