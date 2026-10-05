@@ -1,8 +1,8 @@
 # Celigo CLI Schemas
 
-> **NOTE:** This is an unofficial, community-maintained project. It is not an
-> official Celigo product, is not affiliated with or endorsed by Celigo, and
-> is not supported through Celigo support channels.
+**NOTE:** This is an unaffiliated, personally maintained project. It is not
+a Celigo product, is not endorsed by Celigo, and is not covered by Celigo
+support.
 
 JSON Schemas and editor configuration for Celigo CLI projects, covering
 Neovim, VS Code, Cursor, and Zed. Drop these into any Celigo CLI project and
