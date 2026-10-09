@@ -214,4 +214,4 @@ apply.
 
 ## Source
 
-https://developer.celigo.com/api
+[Celigo CLI skills](https://github.com/celigo/ai)
