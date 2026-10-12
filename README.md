@@ -176,32 +176,39 @@ you get completions and validation.
 
 ## Resource type mapping
 
-Each entry in `.vscode/settings.json` and `.zed/settings.json` matches a
-folder name to a schema file, using the same mapping in both. Keep your
-project's folder names aligned with this table or the schemas will not
-apply.
+Each entry in `.vscode/settings.json` and `.zed/settings.json` maps a
+resource file to a schema, using the same mapping in both. Current CLI
+versions (`celigo pull`) write each resource as `<type>/<name>/<file>.json`,
+for example `exports/My Export/export.json` or
+`integrations/My Integration/flows/My Flow/flow.json`. Each entry therefore
+matches the filename anywhere in the tree (`**/export.json`). The legacy flat
+layout (`exports/*.json`) is still matched too. `*.link.json` pointer files
+are not matched.
 
-| Folder                 | Schema                           |
-| ---------------------- | -------------------------------- |
-| `flows/`               | `flow.schema.json`               |
-| `exports/`             | `export.schema.json`             |
-| `imports/`             | `import.schema.json`             |
-| `connections/`         | `connection.schema.json`         |
-| `iclients/`            | `iclient.schema.json`            |
-| `integrations/`        | `integration.schema.json`        |
-| `apis/`                | `api.schema.json`                |
-| `tools/`               | `tool.schema.json`               |
-| `scripts/`             | `script.schema.json`             |
-| `lookup-caches/`       | `lookupcache.schema.json`        |
-| `mcp-servers/`         | `mcp-server.schema.json`         |
-| `mcp-oauth-providers/` | `mcp-oauth-provider.schema.json` |
-| `ai-agents/`           | `ai-agent.schema.json`           |
-| `guardrails/`          | `guardrail.schema.json`          |
-| `edi-profiles/`        | `ediprofile.schema.json`         |
-| `file-definitions/`    | `filedefinition.schema.json`     |
-| `stacks/`              | `stack.schema.json`              |
-| `async-helpers/`       | `asynchelper.schema.json`        |
-| `on-premise-agents/`   | `on-premise-agent.schema.json`   |
+The Folder column is the legacy folder; the Filename column is what current
+CLI versions write. Neovim snippets above can use either pattern.
+
+| Folder                 | Filename                  | Schema                           |
+| ---------------------- | ------------------------- | -------------------------------- |
+| `flows/`               | `flow.json`               | `flow.schema.json`               |
+| `exports/`             | `export.json`             | `export.schema.json`             |
+| `imports/`             | `import.json`             | `import.schema.json`             |
+| `connections/`         | `connection.json`         | `connection.schema.json`         |
+| `iclients/`            | `iclient.json`            | `iclient.schema.json`            |
+| `integrations/`        | `integration.json`        | `integration.schema.json`        |
+| `apis/`                | `api.json`                | `api.schema.json`                |
+| `tools/`               | `tool.json`               | `tool.schema.json`               |
+| `scripts/`             | `script.json`             | `script.schema.json`             |
+| `lookup-caches/`       | `lookup-cache.json`       | `lookupcache.schema.json`        |
+| `mcp-servers/`         | `mcp-server.json`         | `mcp-server.schema.json`         |
+| `mcp-oauth-providers/` | `mcp-oauth-provider.json` | `mcp-oauth-provider.schema.json` |
+| `ai-agents/`           | `ai-agent.json`           | `ai-agent.schema.json`           |
+| `guardrails/`          | `guardrail.json`          | `guardrail.schema.json`          |
+| `edi-profiles/`        | `edi-profile.json`        | `ediprofile.schema.json`         |
+| `file-definitions/`    | `file-definition.json`    | `filedefinition.schema.json`     |
+| `stacks/`              | `stack.json`              | `stack.schema.json`              |
+| `async-helpers/`       | `async-helper.json`       | `asynchelper.schema.json`        |
+| `on-premise-agents/`   | `on-premise-agent.json`   | `on-premise-agent.schema.json`   |
 
 ## Adding or updating a schema
 
