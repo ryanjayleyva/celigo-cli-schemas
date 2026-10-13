@@ -1,5 +1,7 @@
 # Celigo CLI Schemas
 
+![Neovim showing inline validation and autocomplete from a Celigo CLI schema](assets/neovim-screenshot.png)
+
 **NOTE:** This is an unaffiliated, personally maintained project. It is not
 a Celigo product, is not endorsed by Celigo, and is not covered by Celigo
 support.
@@ -79,7 +81,7 @@ both. `.vscode/` also covers Neovim users on neoconf.nvim, see below.
 Neovim has no built-in JSON language server and no single config file
 convention the way VS Code and Zed do. What you get depends on your setup.
 
-If your Neovim config uses [neoconf.nvim][neoconf] to manage project-local
+If your Neovim config uses [neoconf.nvim](https://github.com/folke/neoconf.nvim) to manage project-local
 LSP settings, you do not need a separate file. neoconf.nvim ships with
 `import = { vscode = true }` enabled by default, it reads the project's
 `.vscode/settings.json` on its own and feeds the `json.schemas` array to
